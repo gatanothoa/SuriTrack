@@ -1,8 +1,9 @@
 {
   "expo": {
-    "name": "CalcPack",
+    "name": "SurtiTrack",
     "slug": "CalcPack",
-    "version": "1.0.0",
+    "version": "1.0.6",
+    "scheme": "surtitrack",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -13,9 +14,26 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
+      "bundleIdentifier": "com.surtitrack.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": false
+        }
+      },
       "supportsTablet": true
     },
     "android": {
+      "package": "com.surtitrack.app",
+      "versionCode": 8,
+      "allowBackup": false,
+      "usesCleartextTraffic": false,
+      "permissions": [],
+      "blockedPermissions": [
+        "com.google.android.gms.permission.AD_ID",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
+      ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -25,6 +43,15 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "ea80607e-61e3-4dee-99b0-04e741c43565"
+      }
+    },
+    "owner": "antcorcar",
+    "plugins": [
+      "expo-mail-composer"
+    ]
   }
 }
