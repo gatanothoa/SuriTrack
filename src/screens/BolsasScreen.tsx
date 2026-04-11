@@ -17,6 +17,17 @@ import { Asset } from 'expo-asset';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MailComposer from 'expo-mail-composer';
 import * as ImagePicker from 'expo-image-picker';
+import {
+  calculateRequestedUnit,
+  calculateRequestedValue,
+  convertFromKg,
+  convertToKg,
+  formatNumber,
+  formatPieces,
+  formatWeight,
+  isNonEmptyPositive,
+  parseOptionalPositiveNumber,
+} from '../utils/calculations';
 
 type MaterialCategory = 'bolsas' | 'cajas' | 'otros';
 type MaterialUnit = 'pieces' | 'kg' | 'g' | 'l';
@@ -82,10 +93,10 @@ type AppPreferences = {
 type HeaderPreferencesPayload = Pick<AppPreferences, 'appName' | 'headerSubtitle' | 'logoSource'>;
 
 const ACCENT_PRESETS: Record<AccentKey, { label: string; color: string; border: string; soft: string }> = {
-  red: { label: 'Rojo', color: '#ef4444', border: '#ef4444', soft: '#fca5a5' },
-  blue: { label: 'Azul', color: '#3b82f6', border: '#60a5fa', soft: '#bfdbfe' },
-  green: { label: 'Verde', color: '#22c55e', border: '#4ade80', soft: '#bbf7d0' },
-  amber: { label: 'Ámbar', color: '#f59e0b', border: '#fbbf24', soft: '#fde68a' },
+  red: { label: 'Naranja', color: '#FFB020', border: '#FFB020', soft: '#FFD27A' },
+  blue: { label: 'Cobalto', color: '#4D8BFF', border: '#7AA7FF', soft: '#BFD3FF' },
+  green: { label: 'Oliva', color: '#7BAE4A', border: '#96C268', soft: '#CFE2AF' },
+  amber: { label: 'Acero', color: '#8A95A3', border: '#A4AFBC', soft: '#D2D9E2' },
 };
 
 const DEFAULT_PREFERENCES: AppPreferences = {
@@ -129,52 +140,6 @@ const CATEGORIES: Array<{ key: MaterialCategory; label: string; icon: keyof type
 ];
 
 const FOLIO_PREFIX_FALLBACK = 'CS';
-
-function parsePositiveNumber(value: string) {
-  const normalized = value.replace(',', '.').trim();
-  const parsed = Number(normalized);
-
-  if (!normalized || Number.isNaN(parsed) || parsed <= 0) {
-    return 0;
-  }
-
-  return parsed;
-}
-
-function parseOptionalPositiveNumber(value: string) {
-  const normalized = value.replace(',', '.').trim();
-
-  if (!normalized) {
-    return 0;
-  }
-
-  return parsePositiveNumber(value);
-}
-
-function isNonEmptyPositive(value: number) {
-  return Number.isFinite(value) && value > 0;
-}
-
-function formatNumber(value: number) {
-  return new Intl.NumberFormat('es-MX', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 3,
-  }).format(value);
-}
-
-function formatWeight(value: number) {
-  return new Intl.NumberFormat('es-MX', {
-    minimumFractionDigits: 3,
-    maximumFractionDigits: 3,
-  }).format(value);
-}
-
-function formatPieces(value: number) {
-  return new Intl.NumberFormat('es-MX', {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(value);
-}
 
 function categoryLabel(category: MaterialCategory) {
   return CATEGORIES.find((item) => item.key === category)?.label ?? 'Otros';
@@ -231,34 +196,6 @@ function getResultLabel(material: MaterialOption) {
     default:
       return 'Resultado';
   }
-}
-
-function getResultUnit(material: MaterialOption) {
-  if (material.calcMode === 'bags') {
-    return 'kg' as const;
-  }
-
-  if (material.calcMode === 'pieces') {
-    return 'pieces' as const;
-  }
-
-  return material.requestUnit;
-}
-
-function convertToKg(value: number, unit: 'kg' | 'g') {
-  if (!isNonEmptyPositive(value)) {
-    return 0;
-  }
-
-  return unit === 'g' ? value / 1000 : value;
-}
-
-function convertFromKg(valueKg: number, unit: 'kg' | 'g') {
-  if (!isNonEmptyPositive(valueKg)) {
-    return 0;
-  }
-
-  return unit === 'g' ? valueKg * 1000 : valueKg;
 }
 
 function normalizeFolioPrefixInput(value: string) {
@@ -521,18 +458,6 @@ function escapeHtml(text: string) {
     .replace(/'/g, '&#39;');
 }
 
-function calculateRequestedValue(material: MaterialOption) {
-  if (material.calcMode === 'bags') {
-    return (material.requestValue / 100) * material.weightPer100Kg;
-  }
-
-  return material.requestValue;
-}
-
-function calculateRequestedUnit(material: MaterialOption) {
-  return getResultUnit(material);
-}
-
 function buildCsv(items: CartItem[], requestCode: string, preferences: AppPreferences) {
   const headers = [
     'Solicitud',
@@ -612,10 +537,12 @@ function createMaterialTemplate(category: MaterialCategory, index: number, reque
 function MaterialCard({
   option,
   selected,
+  accent,
   onPress,
 }: {
   option: MaterialOption;
   selected: boolean;
+  accent: { color: string; border: string; soft: string };
   onPress: () => void;
 }) {
   const resultValue = calculateRequestedValue(option);
@@ -624,36 +551,37 @@ function MaterialCard({
   return (
     <Pressable
       onPress={onPress}
-      className={`mb-3 rounded-[18px] border px-4 py-4 ${selected ? 'border-[#ef4444] bg-[#182433]' : 'border-[#26364a] bg-[#111c29]'}`}
+      className={`mb-2 rounded-ind border px-3 py-3 ${selected ? 'bg-[#2F3740]' : 'border-industrial-border bg-industrial-surface'}`}
+      style={({ pressed }) => [selected ? { borderColor: accent.border } : undefined, pressed ? { opacity: 0.9 } : undefined]}
     >
       <View className="flex-row items-start justify-between gap-4">
         <View className="flex-1">
           <View className="flex-row items-center gap-2">
-            <View className="items-center justify-center rounded-xl bg-[#ef4444]/15 px-2 py-2">
-              <MaterialCommunityIcons name={categoryIcon(option.category)} size={18} color="#ef4444" />
+            <View className="items-center justify-center rounded-ind border border-industrial-border bg-industrial-bg px-2 py-2">
+              <MaterialCommunityIcons name={categoryIcon(option.category)} size={18} color={accent.color} />
             </View>
             <View className="flex-1">
-              <Text className={`text-lg font-semibold ${selected ? 'text-white' : 'text-slate-100'}`}>{option.title || 'Material sin nombre'}</Text>
-              <Text className="text-xs uppercase tracking-[0.2em] text-slate-400">{categoryLabel(option.category)}</Text>
+              <Text className={`text-base font-semibold ${selected ? 'text-white' : 'text-slate-100'}`}>{option.title || 'Material sin nombre'}</Text>
+              <Text className="text-[11px] uppercase tracking-[0.16em] text-industrial-muted">{categoryLabel(option.category)}</Text>
             </View>
           </View>
 
-          <View className="mt-3 flex-row flex-wrap gap-2">
-            <View className="rounded-full border border-[#2e3d52] bg-[#0e1721] px-3 py-1">
-              <Text className="text-xs font-medium text-slate-300">{modeLabel(option.calcMode)}</Text>
+          <View className="mt-2 flex-row flex-wrap gap-1.5">
+            <View className="rounded-ind border border-industrial-border bg-industrial-bg px-2 py-1">
+              <Text className="text-[11px] font-medium text-industrial-muted">{modeLabel(option.calcMode)}</Text>
             </View>
-            <View className="rounded-full border border-[#2e3d52] bg-[#0e1721] px-3 py-1">
-              <Text className="text-xs font-medium text-slate-300">Unidad: {unitLabel(option.requestUnit)}</Text>
+            <View className="rounded-ind border border-industrial-border bg-industrial-bg px-2 py-1">
+              <Text className="text-[11px] font-medium text-industrial-muted">Unidad: {unitLabel(option.requestUnit)}</Text>
             </View>
           </View>
         </View>
 
         <View className="items-end">
-          <Text className="text-[11px] uppercase tracking-[0.2em] text-slate-400">{getResultLabel(option)}</Text>
+          <Text className="text-[10px] uppercase tracking-[0.18em] text-industrial-muted">{getResultLabel(option)}</Text>
           <Text className={`mt-1 text-2xl font-bold ${selected ? 'text-white' : 'text-slate-100'}`}>
             {formatNumber(resultValue)}
           </Text>
-          <Text className="text-xs font-medium text-[#f87171]">{unitLabel(resultUnit)}</Text>
+          <Text className="text-xs font-medium" style={{ color: accent.soft }}>{unitLabel(resultUnit)}</Text>
         </View>
       </View>
     </Pressable>
@@ -662,10 +590,12 @@ function MaterialCard({
 
 function ConfigRow({
   item,
+  accent,
   onChange,
   onDelete,
 }: {
   item: MaterialOption;
+  accent: { color: string; border: string; soft: string };
   onChange: (id: string, patch: Partial<MaterialOption>) => void;
   onDelete: (id: string) => void;
 }) {
@@ -673,14 +603,14 @@ function ConfigRow({
   const displayWeight = convertFromKg(item.weightPer100Kg, item.weightUnit);
 
   return (
-    <View className="mb-3 rounded-[18px] border border-[#26364a] bg-[#111c29] px-3 py-3">
+    <View className="mb-3 rounded-ind border border-industrial-border bg-industrial-surface px-3 py-3">
       <View className="mb-3 flex-row items-center justify-between">
         <View className="flex-row items-center gap-2">
-          <MaterialCommunityIcons name={categoryIcon(item.category)} size={16} color="#ef4444" />
+          <MaterialCommunityIcons name={categoryIcon(item.category)} size={16} color={accent.color} />
           <Text className="text-sm font-semibold text-slate-100">{item.title || 'Material'}</Text>
         </View>
-        <Pressable onPress={() => onDelete(item.id)} className="rounded-full border border-[#ef4444] px-3 py-1">
-          <Text className="text-xs font-semibold text-[#fca5a5]">Eliminar</Text>
+        <Pressable onPress={() => onDelete(item.id)} className="rounded-ind border px-3 py-1" style={{ borderColor: accent.border }}>
+          <Text className="text-xs font-semibold" style={{ color: accent.soft }}>Eliminar</Text>
         </Pressable>
       </View>
 
@@ -690,7 +620,7 @@ function ConfigRow({
         onChangeText={(value) => onChange(item.id, { title: value })}
         placeholder="Nombre del material"
         placeholderTextColor="#64748b"
-        className="mb-3 rounded-xl border border-[#2e3d52] bg-[#0f1721] px-3 py-3 text-white"
+        className="mb-3 rounded-ind border border-industrial-border bg-industrial-bg px-3 py-3 text-white"
       />
 
       {item.calcMode === 'bags' ? (
@@ -699,13 +629,15 @@ function ConfigRow({
           <View className="mb-3 flex-row gap-2">
             <Pressable
               onPress={() => onChange(item.id, { weightUnit: 'g' })}
-              className={`flex-1 rounded-xl px-3 py-3 ${item.weightUnit === 'g' ? 'bg-[#ef4444]' : 'bg-[#0f1721] border border-[#2e3d52]'}`}
+              className={`flex-1 rounded-ind px-3 py-3 ${item.weightUnit === 'g' ? '' : 'bg-industrial-bg border border-industrial-border'}`}
+              style={item.weightUnit === 'g' ? { backgroundColor: '#4D8BFF', borderColor: '#4D8BFF' } : undefined}
             >
               <Text className={`text-center text-sm font-semibold ${item.weightUnit === 'g' ? 'text-white' : 'text-slate-300'}`}>Gramos</Text>
             </Pressable>
             <Pressable
               onPress={() => onChange(item.id, { weightUnit: 'kg' })}
-              className={`flex-1 rounded-xl px-3 py-3 ${item.weightUnit === 'kg' ? 'bg-[#ef4444]' : 'bg-[#0f1721] border border-[#2e3d52]'}`}
+              className={`flex-1 rounded-ind px-3 py-3 ${item.weightUnit === 'kg' ? '' : 'bg-industrial-bg border border-industrial-border'}`}
+              style={item.weightUnit === 'kg' ? { backgroundColor: '#4D8BFF', borderColor: '#4D8BFF' } : undefined}
             >
               <Text className={`text-center text-sm font-semibold ${item.weightUnit === 'kg' ? 'text-white' : 'text-slate-300'}`}>Kilogramos</Text>
             </Pressable>
@@ -721,7 +653,7 @@ function ConfigRow({
             keyboardType="decimal-pad"
             placeholder={item.weightUnit === 'g' ? 'Ej. 450' : 'Ej. 0.450'}
             placeholderTextColor="#64748b"
-            className={`rounded-xl border px-3 py-3 text-white ${invalidWeight ? 'border-[#ef4444] bg-[#2a151a]' : 'border-[#2e3d52] bg-[#0f1721]'}`}
+            className={`rounded-ind border px-3 py-3 text-white ${invalidWeight ? 'border-[#FFB020] bg-[#2a151a]' : 'border-industrial-border bg-industrial-bg'}`}
           />
         </>
       ) : null}
@@ -737,7 +669,8 @@ function ConfigRow({
                 <Pressable
                   key={unit}
                   onPress={() => onChange(item.id, { requestUnit: unit })}
-                  className={`flex-1 rounded-xl px-3 py-3 ${active ? 'bg-[#ef4444]' : 'bg-[#0f1721] border border-[#2e3d52]'}`}
+                  className={`flex-1 rounded-ind px-3 py-3 ${active ? '' : 'bg-industrial-bg border border-industrial-border'}`}
+                  style={active ? { backgroundColor: '#4D8BFF', borderColor: '#4D8BFF' } : undefined}
                 >
                   <Text className={`text-center text-sm font-semibold ${active ? 'text-white' : 'text-slate-300'}`}>{unitLabel(unit)}</Text>
                 </Pressable>
@@ -748,7 +681,7 @@ function ConfigRow({
       ) : null}
 
       {item.calcMode === 'pieces' ? (
-        <View className="mt-1 rounded-xl border border-[#2e3d52] bg-[#0f1721] px-3 py-2">
+        <View className="mt-1 rounded-ind border border-industrial-border bg-industrial-bg px-3 py-2">
           <Text className="text-xs text-slate-400">Se solicitará por piezas.</Text>
         </View>
       ) : null}
@@ -1019,6 +952,7 @@ export default function BolsasScreen({
   const accent = ACCENT_PRESETS[preferences.accentKey];
   const accentStyle = { backgroundColor: accent.color };
   const accentBorderStyle = { borderColor: accent.border };
+  const primaryActionStyle = { backgroundColor: '#FFB020' };
 
   async function savePreferences() {
     const persistedLogo = await persistLogoLocally(draftPreferences.logoSource, draftPreferences.logoLabel);
@@ -1394,9 +1328,9 @@ export default function BolsasScreen({
 
   if (isLoading) {
     return (
-      <View className="flex-1 items-center justify-center bg-[#0c1420] px-6">
-        <View className="items-center gap-4 rounded-[22px] border border-[#26364a] bg-[#111c29] px-6 py-8">
-          <ActivityIndicator size="large" color="#ef4444" />
+      <View className="flex-1 items-center justify-center bg-industrial-bg px-6">
+        <View className="items-center gap-4 rounded-ind border border-industrial-border bg-industrial-surface px-6 py-8">
+          <ActivityIndicator size="large" color="#FFB020" />
           <Text className="text-base font-semibold text-white">Cargando configuracion...</Text>
         </View>
       </View>
@@ -1404,21 +1338,21 @@ export default function BolsasScreen({
   }
 
   return (
-    <ScrollView className="flex-1 bg-[#0c1420]" contentContainerClassName="px-4 pb-32 pt-4">
-      <View className="w-full self-center rounded-[24px] border border-[#26364a] bg-[#111c29] px-4 py-4 shadow-soft">
+    <ScrollView className="flex-1 bg-industrial-bg" contentContainerClassName="px-4 pb-32 pt-4">
+      <View className="w-full self-center rounded-ind border border-industrial-border bg-industrial-surface px-4 py-4">
         {statusMessage ? (
-          <View className={`mb-4 rounded-xl border px-4 py-3 ${statusType === 'error' ? 'border-[#ef4444] bg-[#2a151a]' : 'border-emerald-500/40 bg-emerald-500/10'}`}>
-            <Text className={`text-sm font-medium ${statusType === 'error' ? 'text-[#fecaca]' : 'text-emerald-300'}`}>{statusMessage}</Text>
+          <View className={`mb-4 rounded-ind border px-4 py-3 ${statusType === 'error' ? 'border-[#c2410c] bg-[#3a2414]' : 'border-emerald-500/40 bg-emerald-500/10'}`}>
+            <Text className={`text-sm font-medium ${statusType === 'error' ? 'text-[#fed7aa]' : 'text-emerald-300'}`}>{statusMessage}</Text>
           </View>
         ) : null}
 
-        <View className="mb-4 rounded-[20px] border border-[#26364a] bg-[#0f1721] px-4 py-4">
+        <View className="mb-4 rounded-ind border border-industrial-border bg-industrial-bg px-4 py-4">
           <View className="flex-row items-center justify-between">
             <View className="flex-1 pr-3">
               <Text className="text-[11px] uppercase tracking-[0.28em] text-slate-400">{preferences.appName}</Text>
               <Text className="mt-1 text-2xl font-bold text-white">{preferences.headerSubtitle}</Text>
             </View>
-            <View className="items-center justify-center rounded-2xl px-3 py-3" style={{ backgroundColor: `${accent.color}22` }}>
+            <View className="items-center justify-center rounded-ind border border-industrial-border px-3 py-3" style={{ borderColor: accent.border, backgroundColor: '#2A3138' }}>
               {preferences.logoSource ? (
                 <Image source={{ uri: preferences.logoSource }} style={{ width: 48, height: 48, borderRadius: 12 }} resizeMode="cover" />
               ) : (
@@ -1441,7 +1375,8 @@ export default function BolsasScreen({
                 <Pressable
                   key={category.key}
                   onPress={() => setSelectedCategory(category.key)}
-                  className={`flex-1 rounded-2xl border px-3 py-3 ${active ? 'border-[#ef4444] bg-[#ef4444]' : 'border-[#26364a] bg-[#0f1721]'}`}
+                  className={`flex-1 rounded-ind border px-3 py-3 ${active ? '' : 'border-industrial-border bg-industrial-bg'}`}
+                  style={active ? { borderColor: '#4D8BFF', backgroundColor: '#4D8BFF' } : undefined}
                 >
                   <View className="items-center gap-2">
                     <MaterialCommunityIcons name={category.icon} size={18} color={active ? '#ffffff' : '#cbd5e1'} />
@@ -1455,7 +1390,7 @@ export default function BolsasScreen({
           </View>
         </View>
 
-        <View className="mb-4 rounded-[20px] border border-[#26364a] bg-[#0f1721] px-3 py-3">
+        <View className="mb-4 rounded-ind border border-industrial-border bg-industrial-bg px-3 py-3">
           <View className="mb-3 flex-row items-center justify-between">
             <Text className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">Alta de material</Text>
             <Text className="text-xs text-slate-500">{categoryLabel(selectedCategory)}</Text>
@@ -1472,7 +1407,7 @@ export default function BolsasScreen({
             }
             placeholder={selectedCategory === 'otros' ? 'Ej. Material genérico' : 'Ej. Bolsa reciclada 60x90'}
             placeholderTextColor="#64748b"
-            className="mb-3 rounded-xl border border-[#2e3d52] bg-[#0c1420] px-3 py-3 text-white"
+            className="mb-3 rounded-ind border border-industrial-border bg-industrial-bg px-3 py-3 text-white"
           />
 
           {selectedCategory === 'bolsas' ? (
@@ -1486,7 +1421,8 @@ export default function BolsasScreen({
                       bolsas: { ...current.bolsas, weightUnit: 'g' },
                     }))
                   }
-                  className={`flex-1 rounded-xl px-3 py-3 ${drafts.bolsas.weightUnit === 'g' ? 'bg-[#ef4444]' : 'bg-[#0c1420] border border-[#2e3d52]'}`}
+                  className={`flex-1 rounded-ind px-3 py-3 ${drafts.bolsas.weightUnit === 'g' ? '' : 'bg-industrial-bg border border-industrial-border'}`}
+                  style={drafts.bolsas.weightUnit === 'g' ? { backgroundColor: '#4D8BFF', borderColor: '#4D8BFF' } : undefined}
                 >
                   <Text className={`text-center text-sm font-semibold ${drafts.bolsas.weightUnit === 'g' ? 'text-white' : 'text-slate-300'}`}>
                     Gramos
@@ -1499,7 +1435,8 @@ export default function BolsasScreen({
                       bolsas: { ...current.bolsas, weightUnit: 'kg' },
                     }))
                   }
-                  className={`flex-1 rounded-xl px-3 py-3 ${drafts.bolsas.weightUnit === 'kg' ? 'bg-[#ef4444]' : 'bg-[#0c1420] border border-[#2e3d52]'}`}
+                  className={`flex-1 rounded-ind px-3 py-3 ${drafts.bolsas.weightUnit === 'kg' ? '' : 'bg-industrial-bg border border-industrial-border'}`}
+                  style={drafts.bolsas.weightUnit === 'kg' ? { backgroundColor: '#4D8BFF', borderColor: '#4D8BFF' } : undefined}
                 >
                   <Text className={`text-center text-sm font-semibold ${drafts.bolsas.weightUnit === 'kg' ? 'text-white' : 'text-slate-300'}`}>
                     Kilogramos
@@ -1519,13 +1456,13 @@ export default function BolsasScreen({
                 keyboardType="decimal-pad"
                 placeholder={drafts.bolsas.weightUnit === 'g' ? 'Ej. 450' : 'Ej. 0.450'}
                 placeholderTextColor="#64748b"
-                className="rounded-xl border border-[#2e3d52] bg-[#0c1420] px-3 py-3 text-white"
+                className="rounded-ind border border-industrial-border bg-industrial-bg px-3 py-3 text-white"
               />
             </>
           ) : null}
 
           {selectedCategory === 'cajas' ? (
-            <View className="rounded-xl border border-[#2e3d52] bg-[#0c1420] px-3 py-3">
+            <View className="rounded-ind border border-industrial-border bg-industrial-bg px-3 py-3">
               <Text className="text-sm text-slate-300">Las cajas se solicitarán directamente por piezas.</Text>
             </View>
           ) : null}
@@ -1546,7 +1483,8 @@ export default function BolsasScreen({
                           otros: { ...current.otros, otherUnit: unit },
                         }))
                       }
-                      className={`flex-1 rounded-xl px-3 py-3 ${active ? 'bg-[#ef4444]' : 'bg-[#0c1420] border border-[#2e3d52]'}`}
+                      className={`flex-1 rounded-ind px-3 py-3 ${active ? '' : 'bg-industrial-bg border border-industrial-border'}`}
+                      style={active ? { backgroundColor: '#4D8BFF', borderColor: '#4D8BFF' } : undefined}
                     >
                       <Text className={`text-center text-sm font-semibold ${active ? 'text-white' : 'text-slate-300'}`}>
                         {unitLabel(unit)}
@@ -1558,10 +1496,14 @@ export default function BolsasScreen({
             </>
           ) : null}
 
-          <Pressable onPress={addMaterialToCurrentCategory} className="mt-4 rounded-2xl bg-[#ef4444] px-4 py-4">
+          <Pressable
+            onPress={addMaterialToCurrentCategory}
+            className="mt-4 rounded-ind bg-industrial-primary px-4 py-4"
+            style={({ pressed }) => (pressed ? { opacity: 0.84 } : undefined)}
+          >
             <View className="flex-row items-center justify-center gap-2">
-              <MaterialCommunityIcons name="playlist-plus" size={18} color="#ffffff" />
-              <Text className="text-center text-sm font-semibold uppercase tracking-[0.18em] text-white">
+              <MaterialCommunityIcons name="playlist-plus" size={18} color="#1E2329" />
+              <Text className="text-center text-sm font-semibold uppercase tracking-[0.18em] text-[#1E2329]">
                 Agregar material en {categoryLabel(selectedCategory)}
               </Text>
             </View>
@@ -1569,7 +1511,7 @@ export default function BolsasScreen({
         </View>
 
         {currentMaterials.length === 0 ? (
-          <View className="mb-4 rounded-[20px] border border-[#26364a] bg-[#0f1721] px-4 py-5">
+          <View className="mb-4 rounded-ind border border-industrial-border bg-industrial-bg px-4 py-5">
             <Text className="text-sm font-medium text-slate-200">No hay materiales en {categoryLabel(selectedCategory)}.</Text>
             <Text className="mt-1 text-xs text-slate-400">Agrega uno desde la sección superior para comenzar la solicitud.</Text>
           </View>
@@ -1580,11 +1522,12 @@ export default function BolsasScreen({
             key={item.id}
             option={item}
             selected={item.id === selectedMaterialId}
+            accent={accent}
             onPress={() => setSelectedMaterialId(item.id)}
           />
         ))}
 
-        <View className="mt-2 rounded-[20px] border border-[#26364a] bg-[#0f1721] px-4 py-4">
+        <View className="mt-2 rounded-ind border border-industrial-border bg-industrial-bg px-4 py-4">
           <Text className="mb-2 text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">
             {selectedMaterial ? getInputLabel(selectedMaterial) : 'Cantidad'}
           </Text>
@@ -1607,14 +1550,14 @@ export default function BolsasScreen({
             }
             placeholderTextColor="#64748b"
             editable={Boolean(selectedMaterial)}
-            className="rounded-xl border border-[#2e3d52] bg-[#0c1420] px-4 py-4 text-xl font-semibold text-white"
+            className="rounded-ind border border-industrial-border bg-industrial-bg px-4 py-4 text-xl font-semibold text-white"
           />
           <Text className="mt-2 text-xs text-slate-400">
             Captura la cantidad base y el sistema calcula el valor final según la categoría.
           </Text>
         </View>
 
-        <View className="mt-4 rounded-[22px] border px-5 py-6" style={{ borderColor: accent.border, backgroundColor: '#111827' }}>
+        <View className="mt-4 rounded-ind border px-5 py-6" style={{ borderColor: accent.border, backgroundColor: '#2A3138' }}>
           <Text className="text-center text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400">
             {selectedMaterial ? getResultLabel(selectedMaterial) : 'Resultado'}
           </Text>
@@ -1629,24 +1572,28 @@ export default function BolsasScreen({
           </Text>
         </View>
 
-        <Pressable onPress={addToRequest} className="mt-4 rounded-2xl px-4 py-4 shadow-soft" style={accentStyle}>
+        <Pressable
+          onPress={addToRequest}
+          className="mt-4 rounded-ind bg-industrial-primary px-4 py-4"
+          style={({ pressed }) => (pressed ? { opacity: 0.84 } : undefined)}
+        >
           <View className="flex-row items-center justify-center gap-2">
-            <MaterialCommunityIcons name="plus-circle-outline" size={18} color="#ffffff" />
-            <Text className="text-center text-sm font-semibold uppercase tracking-[0.18em] text-white">Agregar a la solicitud</Text>
+            <MaterialCommunityIcons name="plus-box" size={20} color="#1E2329" />
+            <Text className="text-center text-sm font-bold uppercase tracking-[0.18em] text-[#1E2329]">Agregar a la solicitud</Text>
           </View>
         </Pressable>
 
         <View className="mt-6">
           <View className="mb-3 flex-row items-center justify-between">
             <View className="flex-row items-center gap-2">
-              <MaterialCommunityIcons name="clipboard-list-outline" size={18} color="#ef4444" />
+              <MaterialCommunityIcons name="clipboard-list-outline" size={18} color={accent.color} />
               <Text className="text-xl font-semibold text-slate-100">Resumen de solicitud</Text>
             </View>
             <Text className="text-xs text-slate-400">Próximo folio: {buildRequestCode(preferences.folioPrefix, nextLeadNumber)}</Text>
           </View>
 
-          <View className="rounded-[20px] border border-[#26364a] bg-[#0f1721] p-3">
-            <View className="mb-3 rounded-2xl border px-3 py-3" style={{ borderColor: accent.border, backgroundColor: '#0b1320' }}>
+          <View className="rounded-ind border border-industrial-border bg-industrial-bg p-2">
+            <View className="mb-2 rounded-ind border px-3 py-2" style={{ borderColor: accent.border, backgroundColor: '#232A31' }}>
               <View className="mb-2 flex-row items-center gap-2">
                 <MaterialCommunityIcons name="email-fast-outline" size={16} color={accent.color} />
                 <Text className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">Destino de envío</Text>
@@ -1658,7 +1605,7 @@ export default function BolsasScreen({
                 autoCapitalize="none"
                 placeholder="correo@empresa.com"
                 placeholderTextColor="#64748b"
-                className="rounded-xl border border-[#475569] bg-[#111827] px-3 py-3 text-white"
+                className="rounded-ind border border-industrial-border bg-industrial-surface px-3 py-3 text-white"
               />
               <Text className={`mt-2 text-xs ${recipientEmail.trim().length === 0 || isValidEmail(recipientEmail) ? 'text-slate-400' : 'text-rose-300'}`}>
                 {recipientEmail.trim().length === 0
@@ -1670,28 +1617,33 @@ export default function BolsasScreen({
             </View>
 
             {cartItems.length === 0 ? (
-              <View className="rounded-xl border border-dashed border-[#2e3d52] px-4 py-6">
+              <View className="rounded-ind border border-dashed border-industrial-border px-3 py-4">
                 <Text className="text-sm text-slate-400">Aún no hay materiales en el resumen.</Text>
               </View>
             ) : (
               cartItems.map((item) => (
-                <View key={item.id} className="mb-2 rounded-2xl border border-[#2e3d52] bg-[#111c29] px-3 py-3">
-                  <View className="flex-row items-start justify-between gap-3">
+                <View key={item.id} className="mb-1 rounded-ind border border-industrial-border bg-industrial-surface px-2 py-2">
+                  <View className="flex-row items-center gap-2">
                     <View className="flex-1">
-                      <View className="flex-row items-center gap-2">
-                        <MaterialCommunityIcons name={categoryIcon(item.category)} size={16} color="#ef4444" />
-                        <Text className="text-base font-semibold text-white">{item.materialTitle}</Text>
-                      </View>
-                      <Text className="mt-1 text-xs text-slate-400">Categoría: {categoryLabel(item.category)}</Text>
-                      <Text className="mt-1 text-xs text-slate-300">
-                        Capturado: {formatNumber(item.requestValue)} {unitLabel(item.requestUnit)}
-                      </Text>
-                      <Text className="mt-1 text-xs text-slate-300">
-                        Resultado: {formatNumber(item.calculatedValue)} {unitLabel(item.calculatedUnit)}
+                      <Text className="text-sm font-semibold text-white">{item.materialTitle}</Text>
+                      <Text className="text-[11px] text-industrial-muted">
+                        {categoryLabel(item.category)} · {modeLabel(item.calcMode)}
                       </Text>
                     </View>
-                    <Pressable onPress={() => removeCartItem(item.id)} className="rounded-full border px-3 py-1.5" style={accentBorderStyle}>
-                      <Text className="text-xs font-semibold" style={{ color: accent.soft }}>Quitar</Text>
+                    <View className="items-end">
+                      <Text className="text-[10px] uppercase tracking-[0.12em] text-industrial-muted">Capt.</Text>
+                      <Text className="text-sm font-semibold text-white">{formatNumber(item.requestValue)}</Text>
+                    </View>
+                    <View className="items-end">
+                      <Text className="text-[10px] uppercase tracking-[0.12em] text-industrial-muted">Res.</Text>
+                      <Text className="text-sm font-semibold text-white">{formatNumber(item.calculatedValue)}</Text>
+                    </View>
+                    <Pressable
+                      onPress={() => removeCartItem(item.id)}
+                      className="rounded-ind border px-2 py-1"
+                      style={({ pressed }) => [accentBorderStyle, pressed ? { opacity: 0.82 } : undefined]}
+                    >
+                      <Text className="text-[10px] font-semibold" style={{ color: accent.soft }}>Quitar</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -1699,7 +1651,11 @@ export default function BolsasScreen({
             )}
 
             <View className="mt-2 flex-row gap-2">
-              <Pressable onPress={clearCart} className="flex-1 rounded-xl border border-[#2e3d52] px-3 py-3">
+              <Pressable
+                onPress={clearCart}
+                className="flex-1 rounded-ind border border-industrial-border px-3 py-3"
+                style={({ pressed }) => (pressed ? { opacity: 0.82 } : undefined)}
+              >
                 <Text className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">Vaciar solicitud</Text>
               </Pressable>
               <Pressable
@@ -1707,10 +1663,10 @@ export default function BolsasScreen({
                 onPress={() => {
                   void sendCartByEmail();
                 }}
-                className={`flex-1 rounded-xl px-3 py-3 ${canSendEmail ? '' : 'bg-[#3f3f46]'}`}
-                style={canSendEmail ? accentStyle : undefined}
+                className={`flex-1 rounded-ind px-3 py-3 ${canSendEmail ? '' : 'bg-[#55606B]'}`}
+                style={({ pressed }) => [canSendEmail ? primaryActionStyle : undefined, canSendEmail && pressed ? { opacity: 0.84 } : undefined]}
               >
-                <Text className={`text-center text-xs font-semibold uppercase tracking-[0.16em] ${canSendEmail ? 'text-white' : 'text-zinc-300'}`}>
+                <Text className={`text-center text-xs font-semibold uppercase tracking-[0.16em] ${canSendEmail ? 'text-[#1E2329]' : 'text-zinc-300'}`}>
                   {isSendingEmail ? 'Enviando...' : 'Enviar solicitud'}
                 </Text>
               </Pressable>
@@ -1718,7 +1674,7 @@ export default function BolsasScreen({
           </View>
         </View>
 
-        <View className="mt-4 rounded-[20px] border border-[#26364a] bg-[#0f1721] px-4 py-4">
+        <View className="mt-4 rounded-ind border border-industrial-border bg-industrial-bg px-4 py-4">
           <Pressable onPress={() => setSettingsOpen((current) => !current)} className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-2">
               <MaterialCommunityIcons name="tune-variant" size={18} color={accent.color} />
@@ -1729,7 +1685,7 @@ export default function BolsasScreen({
 
           {settingsOpen ? (
             <View className="mt-4">
-              <View className="mb-4 rounded-2xl border border-[#334155] bg-[#0b1320] px-4 py-4">
+              <View className="mb-4 rounded-ind border border-industrial-border bg-industrial-bg px-4 py-4">
                 <View className="mb-3 flex-row items-center gap-2">
                   <MaterialCommunityIcons name="palette-outline" size={16} color={accent.color} />
                     <Text className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">Marca, logo y exportación</Text>
@@ -1746,7 +1702,7 @@ export default function BolsasScreen({
                   }
                   placeholder="SurtiTrack"
                   placeholderTextColor="#64748b"
-                  className="mb-3 rounded-xl border border-[#475569] bg-[#111827] px-3 py-3 text-white"
+                  className="mb-3 rounded-ind border border-industrial-border bg-industrial-surface px-3 py-3 text-white"
                 />
 
                 <Text className="mb-1 text-xs text-slate-400">Subtítulo del encabezado</Text>
@@ -1760,7 +1716,7 @@ export default function BolsasScreen({
                   }
                   placeholder="Solicitud logística corporativa"
                   placeholderTextColor="#64748b"
-                  className="mb-3 rounded-xl border border-[#475569] bg-[#111827] px-3 py-3 text-white"
+                  className="mb-3 rounded-ind border border-industrial-border bg-industrial-surface px-3 py-3 text-white"
                 />
 
                 <Text className="mb-1 text-xs text-slate-400">Prefijo del folio</Text>
@@ -1774,9 +1730,9 @@ export default function BolsasScreen({
                   }
                   placeholder="CS"
                   placeholderTextColor="#64748b"
-                  className="mb-3 rounded-xl border border-[#475569] bg-[#111827] px-3 py-3 text-white"
+                  className="mb-3 rounded-ind border border-industrial-border bg-industrial-surface px-3 py-3 text-white"
                 />
-                <View className="mb-3 rounded-xl border border-[#334155] bg-[#0f1721] px-3 py-3">
+                <View className="mb-3 rounded-ind border border-industrial-border bg-industrial-bg px-3 py-3">
                   <Text className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Vista de folio</Text>
                   <Text className="mt-1 text-base font-semibold text-white">
                     {buildRequestCode(draftPreferences.folioPrefix, nextLeadNumber)}
@@ -1795,7 +1751,7 @@ export default function BolsasScreen({
                   }
                   placeholder="Operación interna segura y trazable."
                   placeholderTextColor="#64748b"
-                  className="mb-4 rounded-xl border border-[#475569] bg-[#111827] px-3 py-3 text-white"
+                  className="mb-4 rounded-ind border border-industrial-border bg-industrial-surface px-3 py-3 text-white"
                 />
 
                 <Text className="mb-1 text-xs text-slate-400">Machote del correo</Text>
@@ -1812,7 +1768,7 @@ export default function BolsasScreen({
                   textAlignVertical="top"
                   placeholder={DEFAULT_PREFERENCES.emailTemplate}
                   placeholderTextColor="#64748b"
-                  className="mb-3 min-h-[220px] rounded-xl border border-[#475569] bg-[#111827] px-3 py-3 text-white"
+                  className="mb-3 min-h-[220px] rounded-ind border border-industrial-border bg-industrial-surface px-3 py-3 text-white"
                 />
 
                   <Text className="mb-1 text-xs text-slate-400">Texto para Excel / CSV</Text>
@@ -1829,7 +1785,7 @@ export default function BolsasScreen({
                       textAlignVertical="top"
                       placeholder="Registro interno para control y seguimiento."
                     placeholderTextColor="#64748b"
-                      className="mb-3 min-h-[96px] rounded-xl border border-[#475569] bg-[#111827] px-3 py-3 text-white"
+                      className="mb-3 min-h-[96px] rounded-ind border border-industrial-border bg-industrial-surface px-3 py-3 text-white"
                   />
 
                   <Text className="mb-1 text-xs text-slate-400">Logo de la empresa</Text>
@@ -1838,7 +1794,7 @@ export default function BolsasScreen({
                   </Text>
 
                   <View className="mb-3 flex-row gap-2">
-                    <Pressable onPress={() => void pickLogoFromDevice()} className="flex-1 rounded-xl border border-[#475569] px-3 py-3">
+                    <Pressable onPress={() => void pickLogoFromDevice()} className="flex-1 rounded-ind border border-industrial-border px-3 py-3">
                       <Text className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-slate-200">
                         Cargar desde galería
                       </Text>
@@ -1851,7 +1807,7 @@ export default function BolsasScreen({
                           logoLabel: DEFAULT_PREFERENCES.logoLabel,
                         }))
                       }
-                      className="flex-1 rounded-xl border border-[#475569] px-3 py-3"
+                      className="flex-1 rounded-ind border border-industrial-border px-3 py-3"
                     >
                       <Text className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-slate-200">
                         Quitar logo
@@ -1859,10 +1815,10 @@ export default function BolsasScreen({
                     </Pressable>
                   </View>
 
-                  <View className="mb-4 rounded-2xl border border-[#334155] bg-[#111827] px-4 py-4">
+                  <View className="mb-4 rounded-ind border border-industrial-border bg-industrial-surface px-4 py-4">
                     <Text className="mb-2 text-[11px] uppercase tracking-[0.22em] text-slate-400">Vista previa</Text>
                     <View className="flex-row items-center gap-3">
-                      <View className="h-14 w-14 items-center justify-center rounded-2xl bg-[#0f1721] overflow-hidden">
+                      <View className="h-14 w-14 items-center justify-center rounded-ind bg-industrial-bg overflow-hidden">
                         {draftPreferences.logoSource ? (
                           <Image source={{ uri: draftPreferences.logoSource }} style={{ width: 56, height: 56, borderRadius: 12 }} resizeMode="cover" />
                         ) : (
@@ -1893,7 +1849,7 @@ export default function BolsasScreen({
                             accentKey: key,
                           }))
                         }
-                        className={`rounded-full border px-3 py-2 ${active ? 'bg-[#111827]' : 'bg-transparent'}`}
+                        className={`rounded-ind border px-3 py-2 ${active ? 'bg-industrial-surface' : 'bg-transparent'}`}
                         style={{ borderColor: preset.border }}
                       >
                         <Text className="text-xs font-semibold text-white">{preset.label}</Text>
@@ -1906,14 +1862,18 @@ export default function BolsasScreen({
                     <Text className={`text-xs font-medium ${hasPendingPreferenceChanges ? 'text-amber-300' : 'text-emerald-300'}`}>
                       {hasPendingPreferenceChanges ? 'Hay cambios sin guardar.' : 'Configuración guardada.'}
                     </Text>
-                    <Pressable onPress={savePreferences} className="rounded-2xl px-4 py-3" style={accentStyle}>
+                    <Pressable
+                      onPress={savePreferences}
+                      className="rounded-ind px-4 py-3"
+                      style={({ pressed }) => [accentStyle, pressed ? { opacity: 0.84 } : undefined]}
+                    >
                       <Text className="text-xs font-semibold uppercase tracking-[0.18em] text-white">Guardar cambios</Text>
                     </Pressable>
                   </View>
               </View>
 
               {currentMaterials.map((item) => (
-                <ConfigRow key={item.id} item={item} onChange={updateMaterialById} onDelete={removeMaterial} />
+                <ConfigRow key={item.id} item={item} accent={accent} onChange={updateMaterialById} onDelete={removeMaterial} />
               ))}
             </View>
           ) : null}
@@ -1922,3 +1882,4 @@ export default function BolsasScreen({
     </ScrollView>
   );
 }
+

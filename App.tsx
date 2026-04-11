@@ -25,17 +25,17 @@ const DEFAULT_HEADER_PREFERENCES: HeaderPreferences = {
 function StartupLogo() {
 
   return (
-    <View className="flex-1 items-center justify-center bg-black px-6">
+    <View className="flex-1 items-center justify-center bg-industrial-bg px-6">
       <RNStatusBar barStyle="light-content" />
 
       <View className="w-full max-w-[320px] items-center">
-        <View className="items-center rounded-[28px] border border-[#7CFF3A]/30 bg-[#050905] px-5 py-5 shadow-soft">
-          <View className="items-center justify-center rounded-[20px] border border-[#7CFF3A]/30 bg-[#0a1405] p-2">
+        <View className="items-center rounded-ind border border-industrial-border bg-industrial-surface px-5 py-5">
+          <View className="items-center justify-center rounded-ind border border-industrial-border bg-industrial-bg p-2">
             <Image source={require('./assets/logo.png')} style={{ width: 210, height: 210, borderRadius: 14 }} resizeMode="cover" />
           </View>
 
-          <Text className="mt-4 text-[13px] font-semibold tracking-[0.35em] text-[#7CFF3A]">SURTITRACK</Text>
-          <Text className="mt-3 text-sm font-medium text-[#a9ff8b]">SurtiTrack</Text>
+          <Text className="mt-4 text-[13px] font-semibold tracking-[0.35em] text-industrial-primary">SURTITRACK</Text>
+          <Text className="mt-3 text-sm font-medium text-industrial-text">Operación logística</Text>
         </View>
       </View>
     </View>
@@ -89,7 +89,7 @@ export default function App() {
   if (!ready) {
     return (
       <SafeAreaProvider>
-        <SafeAreaView className="flex-1 bg-black">
+        <SafeAreaView className="flex-1 bg-industrial-bg">
           <StatusBar style="light" />
           <StartupLogo />
         </SafeAreaView>
@@ -99,17 +99,17 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <SafeAreaView className="flex-1 bg-[#0c1420]">
+      <SafeAreaView className="flex-1 bg-industrial-bg">
         <StatusBar style="light" />
 
-        <View className="flex-1 bg-[#0c1420]">
-          <View className="border-b border-[#26364a] bg-[#111c29] px-4 py-4">
+        <View className="flex-1 bg-industrial-bg">
+          <View className="border-b border-industrial-border bg-industrial-surface px-4 py-4">
             <View className="flex-row items-center gap-3">
-              <View className="items-center justify-center rounded-2xl bg-[#ef4444]/15 px-3 py-3">
+              <View className="items-center justify-center rounded-ind border border-industrial-border bg-industrial-bg px-3 py-3">
                 {headerPreferences.logoSource ? (
                   <Image source={{ uri: headerPreferences.logoSource }} style={{ width: 24, height: 24, borderRadius: 6 }} resizeMode="cover" />
                 ) : (
-                  <MaterialCommunityIcons name="clipboard-text-outline" size={22} color="#ef4444" />
+                  <MaterialCommunityIcons name="clipboard-text-outline" size={22} color="#FFB020" />
                 )}
               </View>
               <View>
