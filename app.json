@@ -27,7 +27,6 @@
       "package": "com.surtitrack.app",
       "versionCode": 8,
       "allowBackup": false,
-      "usesCleartextTraffic": false,
       "permissions": [],
       "blockedPermissions": [
         "com.google.android.gms.permission.AD_ID",
@@ -51,7 +50,9 @@
     },
     "owner": "antcorcar",
     "plugins": [
-      "expo-mail-composer"
+      "expo-mail-composer",
+      "expo-asset",
+      "expo-font"
     ]
   }
 }
