@@ -239,9 +239,16 @@ function isValidEmail(value: string) {
 }
 
 function sanitizeCsvCell(value: string) {
-  const normalized = value.replace(/[\r\n]+/g, ' ').trim();
+  const normalized = value
+    .replace(/[\u0000-\u001F\u007F]+/g, ' ')
+    .replace(/[\r\n]+/g, ' ')
+    .trim();
 
-  if (/^[=+\-@]/.test(normalized)) {
+  if (!normalized) {
+    return '';
+  }
+
+  if (/^[=+\-@]/.test(normalized) || /^[\t ]+[=+\-@]/.test(normalized)) {
     return `'${normalized}`;
   }
 
@@ -458,25 +465,24 @@ function escapeHtml(text: string) {
     .replace(/'/g, '&#39;');
 }
 
-function buildCsv(items: CartItem[], requestCode: string, preferences: AppPreferences) {
+function buildCsv(items: CartItem[], requestCode: string, preferences: AppPreferences, generatedAt: Date) {
   const headers = [
-    'Solicitud',
-    'Categoria',
-    'Material',
-    'Modo',
-    'Cantidad capturada',
-    'Unidad capturada',
-    'Resultado',
-    'Unidad resultado',
-    'Fecha',
+    'FOLIO',
+    'CATEGORIA',
+    'DESCRIPCION',
+    'MODO',
+    'CANTIDAD SOLICITADA',
+    'UNIDAD SOLICITADA',
+    'PESO CALCULADO',
+    'UNIDAD RESULTADO',
+    'FECHA REGISTRO',
   ];
 
   const metadataRows = [
-    ['Marca', preferences.appName],
-    ['Subtitulo', preferences.headerSubtitle],
-    ['Nota del correo', preferences.emailNote],
-    ['Nota del Excel', preferences.sheetNote],
-    ['Logo', preferences.logoSource ? preferences.logoLabel : 'Predeterminado'],
+    ['EMPRESA', preferences.appName],
+    ['SUBTITULO', preferences.headerSubtitle],
+    ['FECHA GENERACION', generatedAt.toLocaleString('es-MX')],
+    ['NOTA', preferences.sheetNote],
   ];
 
   const rows = items.map((item) => [
@@ -1236,10 +1242,6 @@ export default function BolsasScreen({
         emailNote: preferences.emailNote,
       });
       const subject = `Solicitud de material auxiliar ${requestCode} ${now.toLocaleDateString('es-MX')}`;
-      const bodyHtmlLines = body
-        .split('\n')
-        .map((line) => `<p style="margin:0 0 8px 0;">${escapeHtml(line)}</p>`)
-        .join('');
 
       if (Platform.OS === 'web') {
         const mailtoUrl = buildMailtoUrl(recipientEmail.trim(), subject, body);
@@ -1276,7 +1278,7 @@ export default function BolsasScreen({
         return;
       }
 
-      const csv = buildCsv(cartItems, requestCode, preferences);
+      const csv = buildCsv(cartItems, requestCode, preferences, now);
       const fileName = `Solicitud_material_auxiliar_${requestCode}_${now.toISOString().slice(0, 10)}.csv`;
       const baseDirectory = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
 
@@ -1293,12 +1295,81 @@ export default function BolsasScreen({
 
       const logoDataUri = await resolveLogoAsDataUri(preferences.logoSource);
 
+      const previewRows = cartItems.slice(0, 5);
+      const detailRowsHtml = previewRows
+        .map(
+          (item) => `
+            <tr>
+              <td style="padding:8px 10px; border:1px solid #d1d5db; font-size:12px; color:#111827;">${escapeHtml(item.materialTitle)}</td>
+              <td style="padding:8px 10px; border:1px solid #d1d5db; font-size:12px; color:#111827;">${escapeHtml(categoryLabel(item.category))}</td>
+              <td style="padding:8px 10px; border:1px solid #d1d5db; font-size:12px; color:#111827; text-align:right;">${escapeHtml(formatNumber(item.requestValue))}</td>
+              <td style="padding:8px 10px; border:1px solid #d1d5db; font-size:12px; color:#111827; text-align:right;">${escapeHtml(formatNumber(item.calculatedValue))}</td>
+            </tr>
+          `
+        )
+        .join('');
+
       const htmlBody = `
-        <div style="font-family: Arial, Helvetica, sans-serif; color: #0f172a;">
-          <div style="text-align:center; margin-bottom: 14px;">
-            ${logoDataUri ? `<img src="${logoDataUri}" alt="SurtiTrack" style="width: 170px; max-width: 100%; border-radius: 10px; display: inline-block;" />` : ''}
+        <div style="font-family: Arial, Helvetica, sans-serif; background:#f3f4f6; padding:0; margin:0; color:#111827;">
+          <div style="max-width:760px; margin:0 auto; background:#ffffff; border:1px solid #d1d5db;">
+            <div style="background:#1E2329; padding:14px 16px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                ${logoDataUri ? `<img src="${logoDataUri}" alt="${escapeHtml(preferences.appName)}" style="height:34px; max-width:120px; object-fit:contain; background:#ffffff; padding:2px 4px; border-radius:4px;" />` : `<span style="color:#F3F5F7; font-size:16px; font-weight:700; letter-spacing:0.04em;">${escapeHtml(preferences.appName)}</span>`}
+              </div>
+              <div style="background:#FFB020; color:#1E2329; font-weight:700; font-size:12px; padding:4px 8px; border-radius:4px;">FOLIO ${escapeHtml(requestCode)}</div>
+            </div>
+
+            <div style="padding:16px;">
+              <p style="margin:0 0 10px 0; font-size:13px; color:#374151;">${escapeHtml(getGreetingByHour(now))}</p>
+              <p style="margin:0 0 14px 0; font-size:13px; color:#374151;">Comparto la solicitud de material auxiliar.</p>
+
+              <table style="width:100%; border-collapse:collapse; margin:0 0 14px 0;">
+                <thead>
+                  <tr>
+                    <th colspan="2" style="text-align:left; background:#f9fafb; border:1px solid #d1d5db; padding:8px 10px; font-size:12px; letter-spacing:0.06em; color:#374151;">RESUMEN EJECUTIVO</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td style="width:45%; border:1px solid #d1d5db; padding:8px 10px; font-size:12px; color:#6b7280;">Folio</td>
+                    <td style="border:1px solid #d1d5db; padding:8px 10px; font-size:13px; font-weight:700; color:#1f2937;">${escapeHtml(requestCode)}</td>
+                  </tr>
+                  <tr>
+                    <td style="border:1px solid #d1d5db; padding:8px 10px; font-size:12px; color:#6b7280;">Total de Materiales</td>
+                    <td style="border:1px solid #d1d5db; padding:8px 10px; font-size:13px; font-weight:600; color:#1f2937;">${escapeHtml(String(totalItems))}</td>
+                  </tr>
+                  <tr>
+                    <td style="border:1px solid #d1d5db; padding:8px 10px; font-size:12px; color:#6b7280;">Total de Piezas</td>
+                    <td style="border:1px solid #d1d5db; padding:8px 10px; font-size:13px; font-weight:600; color:#1f2937;">${escapeHtml(formatPieces(totalPieces))}</td>
+                  </tr>
+                  <tr>
+                    <td style="border:1px solid #d1d5db; padding:8px 10px; font-size:12px; color:#6b7280;">Total de Kilos</td>
+                    <td style="border:1px solid #d1d5db; padding:8px 10px; font-size:13px; font-weight:600; color:#1f2937;">${escapeHtml(formatWeight(totalKg))} kg</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <table style="width:100%; border-collapse:collapse; margin:0 0 12px 0;">
+                <thead>
+                  <tr>
+                    <th colspan="4" style="text-align:left; background:#f9fafb; border:1px solid #d1d5db; padding:8px 10px; font-size:12px; letter-spacing:0.06em; color:#374151;">DETALLE RAPIDO (PRIMEROS 5 ITEMS)</th>
+                  </tr>
+                  <tr>
+                    <th style="text-align:left; border:1px solid #d1d5db; padding:8px 10px; font-size:11px; color:#6b7280;">MATERIAL</th>
+                    <th style="text-align:left; border:1px solid #d1d5db; padding:8px 10px; font-size:11px; color:#6b7280;">CATEGORIA</th>
+                    <th style="text-align:right; border:1px solid #d1d5db; padding:8px 10px; font-size:11px; color:#6b7280;">CANTIDAD</th>
+                    <th style="text-align:right; border:1px solid #d1d5db; padding:8px 10px; font-size:11px; color:#6b7280;">RESULTADO</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${detailRowsHtml || `<tr><td colspan="4" style="padding:10px; border:1px solid #d1d5db; font-size:12px; color:#6b7280;">Sin elementos para previsualizar.</td></tr>`}
+                </tbody>
+              </table>
+
+              <p style="margin:0 0 6px 0; font-size:12px; color:#4b5563;">${escapeHtml(preferences.emailNote)}</p>
+              <p style="margin:0; font-size:11px; color:#6b7280;">Generado por SurtiTrack - Logística Operativa</p>
+            </div>
           </div>
-          ${bodyHtmlLines}
         </div>
       `;
 
