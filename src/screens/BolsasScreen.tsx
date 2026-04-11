@@ -5,6 +5,7 @@ import {
   Image,
   Linking,
   Platform,
+  KeyboardAvoidingView,
   Pressable,
   ScrollView,
   Text,
@@ -12,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Asset } from 'expo-asset';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -236,6 +238,19 @@ function buildMailtoUrl(recipient: string, subject: string, body: string) {
 
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+}
+
+async function triggerStatusFeedback(kind: 'success' | 'error') {
+  if (Platform.OS === 'web') {
+    return;
+  }
+
+  if (kind === 'success') {
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    return;
+  }
+
+  await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
 }
 
 function sanitizeCsvCell(value: string) {
@@ -558,7 +573,7 @@ function MaterialCard({
     <Pressable
       onPress={onPress}
       className={`mb-2 rounded-ind border px-3 py-3 ${selected ? 'bg-[#2F3740]' : 'border-industrial-border bg-industrial-surface'}`}
-      style={({ pressed }) => [selected ? { borderColor: accent.border } : undefined, pressed ? { opacity: 0.9 } : undefined]}
+      style={({ pressed }) => [selected ? { borderColor: accent.border } : undefined, pressed ? { opacity: 0.82 } : undefined]}
     >
       <View className="flex-row items-start justify-between gap-4">
         <View className="flex-1">
@@ -727,6 +742,14 @@ export default function BolsasScreen({
     const timer = setTimeout(() => setStatusMessage(null), 3500);
     return () => clearTimeout(timer);
   }, [statusMessage]);
+
+  useEffect(() => {
+    if (!statusMessage || !statusType) {
+      return;
+    }
+
+    void triggerStatusFeedback(statusType);
+  }, [statusMessage, statusType]);
 
   useEffect(() => {
     let isMounted = true;
@@ -1409,13 +1432,21 @@ export default function BolsasScreen({
   }
 
   return (
-    <ScrollView className="flex-1 bg-industrial-bg" contentContainerClassName="px-4 pb-32 pt-4">
+    <KeyboardAvoidingView className="flex-1 bg-industrial-bg" behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}>
+      <ScrollView
+        className="flex-1 bg-industrial-bg"
+        contentContainerClassName="px-4 pb-32 pt-4"
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+      >
       <View className="w-full self-center rounded-ind border border-industrial-border bg-industrial-surface px-4 py-4">
-        {statusMessage ? (
-          <View className={`mb-4 rounded-ind border px-4 py-3 ${statusType === 'error' ? 'border-[#c2410c] bg-[#3a2414]' : 'border-emerald-500/40 bg-emerald-500/10'}`}>
-            <Text className={`text-sm font-medium ${statusType === 'error' ? 'text-[#fed7aa]' : 'text-emerald-300'}`}>{statusMessage}</Text>
-          </View>
-        ) : null}
+        <View className="mb-4" style={{ minHeight: 56 }}>
+          {statusMessage ? (
+            <View className={`rounded-ind border px-4 py-3 ${statusType === 'error' ? 'border-[#c2410c] bg-[#3a2414]' : 'border-emerald-500/40 bg-emerald-500/10'}`}>
+              <Text className={`text-sm font-medium ${statusType === 'error' ? 'text-[#fed7aa]' : 'text-emerald-300'}`}>{statusMessage}</Text>
+            </View>
+          ) : null}
+        </View>
 
         <View className="mb-4 rounded-ind border border-industrial-border bg-industrial-bg px-4 py-4">
           <View className="flex-row items-center justify-between">
@@ -1527,7 +1558,7 @@ export default function BolsasScreen({
                 keyboardType="decimal-pad"
                 placeholder={drafts.bolsas.weightUnit === 'g' ? 'Ej. 450' : 'Ej. 0.450'}
                 placeholderTextColor="#64748b"
-                className="rounded-ind border border-industrial-border bg-industrial-bg px-3 py-3 text-white"
+                className={`rounded-ind border px-3 py-3 text-white ${drafts.bolsas.weightInput.trim().length > 0 && !isNonEmptyPositive(convertToKg(parseOptionalPositiveNumber(drafts.bolsas.weightInput), drafts.bolsas.weightUnit)) ? 'border-[#FFB020] bg-[#2a151a]' : 'border-industrial-border bg-industrial-bg'}`}
               />
             </>
           ) : null}
@@ -1621,7 +1652,7 @@ export default function BolsasScreen({
             }
             placeholderTextColor="#64748b"
             editable={Boolean(selectedMaterial)}
-            className="rounded-ind border border-industrial-border bg-industrial-bg px-4 py-4 text-xl font-semibold text-white"
+            className={`rounded-ind border px-4 py-4 text-xl font-semibold text-white ${selectedMaterial && !isNonEmptyPositive(selectedMaterial.requestValue) ? 'border-[#FFB020] bg-[#2a151a]' : 'border-industrial-border bg-industrial-bg'}`}
           />
           <Text className="mt-2 text-xs text-slate-400">
             Captura la cantidad base y el sistema calcula el valor final según la categoría.
@@ -1676,7 +1707,7 @@ export default function BolsasScreen({
                 autoCapitalize="none"
                 placeholder="correo@empresa.com"
                 placeholderTextColor="#64748b"
-                className="rounded-ind border border-industrial-border bg-industrial-surface px-3 py-3 text-white"
+                className={`rounded-ind border px-3 py-3 text-white ${recipientEmail.trim().length > 0 && !isValidEmail(recipientEmail) ? 'border-[#FFB020] bg-[#2a151a]' : 'border-industrial-border bg-industrial-surface'}`}
               />
               <Text className={`mt-2 text-xs ${recipientEmail.trim().length === 0 || isValidEmail(recipientEmail) ? 'text-slate-400' : 'text-rose-300'}`}>
                 {recipientEmail.trim().length === 0
@@ -1950,7 +1981,8 @@ export default function BolsasScreen({
           ) : null}
         </View>
       </View>
-    </ScrollView>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

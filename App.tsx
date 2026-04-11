@@ -25,8 +25,8 @@ const DEFAULT_HEADER_PREFERENCES: HeaderPreferences = {
 function StartupLogo() {
 
   return (
-    <View className="flex-1 items-center justify-center bg-industrial-bg px-6">
-      <RNStatusBar barStyle="light-content" />
+    <View className="flex-1 items-center justify-center bg-industrial-bg px-6" style={{ backgroundColor: '#1E2329' }}>
+      <RNStatusBar barStyle="light-content" backgroundColor="#1E2329" translucent={false} />
 
       <View className="w-full max-w-[320px] items-center">
         <View className="items-center rounded-ind border border-industrial-border bg-industrial-surface px-5 py-5">
@@ -89,8 +89,8 @@ export default function App() {
   if (!ready) {
     return (
       <SafeAreaProvider>
-        <SafeAreaView className="flex-1 bg-industrial-bg">
-          <StatusBar style="light" />
+        <SafeAreaView className="flex-1 bg-industrial-bg" style={{ backgroundColor: '#1E2329' }}>
+          <StatusBar style="light" backgroundColor="#1E2329" translucent={false} />
           <StartupLogo />
         </SafeAreaView>
       </SafeAreaProvider>
@@ -99,8 +99,8 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <SafeAreaView className="flex-1 bg-industrial-bg">
-        <StatusBar style="light" />
+      <SafeAreaView className="flex-1 bg-industrial-bg" style={{ backgroundColor: '#1E2329' }}>
+        <StatusBar style="light" backgroundColor="#1E2329" translucent={false} />
 
         <View className="flex-1 bg-industrial-bg">
           <View className="border-b border-industrial-border bg-industrial-surface px-4 py-4">
