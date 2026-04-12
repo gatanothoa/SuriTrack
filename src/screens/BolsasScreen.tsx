@@ -651,14 +651,14 @@ function ConfigRow({
             <Pressable
               onPress={() => onChange(item.id, { weightUnit: 'g' })}
               className={`flex-1 rounded-ind px-3 py-3 ${item.weightUnit === 'g' ? '' : 'bg-industrial-bg border border-industrial-border'}`}
-              style={item.weightUnit === 'g' ? { backgroundColor: '#4D8BFF', borderColor: '#4D8BFF' } : undefined}
+              style={item.weightUnit === 'g' ? { backgroundColor: accent.color, borderColor: accent.border } : undefined}
             >
               <Text className={`text-center text-sm font-semibold ${item.weightUnit === 'g' ? 'text-white' : 'text-slate-300'}`}>Gramos</Text>
             </Pressable>
             <Pressable
               onPress={() => onChange(item.id, { weightUnit: 'kg' })}
               className={`flex-1 rounded-ind px-3 py-3 ${item.weightUnit === 'kg' ? '' : 'bg-industrial-bg border border-industrial-border'}`}
-              style={item.weightUnit === 'kg' ? { backgroundColor: '#4D8BFF', borderColor: '#4D8BFF' } : undefined}
+              style={item.weightUnit === 'kg' ? { backgroundColor: accent.color, borderColor: accent.border } : undefined}
             >
               <Text className={`text-center text-sm font-semibold ${item.weightUnit === 'kg' ? 'text-white' : 'text-slate-300'}`}>Kilogramos</Text>
             </Pressable>
@@ -691,7 +691,7 @@ function ConfigRow({
                   key={unit}
                   onPress={() => onChange(item.id, { requestUnit: unit })}
                   className={`flex-1 rounded-ind px-3 py-3 ${active ? '' : 'bg-industrial-bg border border-industrial-border'}`}
-                  style={active ? { backgroundColor: '#4D8BFF', borderColor: '#4D8BFF' } : undefined}
+                  style={active ? { backgroundColor: accent.color, borderColor: accent.border } : undefined}
                 >
                   <Text className={`text-center text-sm font-semibold ${active ? 'text-white' : 'text-slate-300'}`}>{unitLabel(unit)}</Text>
                 </Pressable>
@@ -981,6 +981,9 @@ export default function BolsasScreen({
   const accent = ACCENT_PRESETS[preferences.accentKey];
   const accentStyle = { backgroundColor: accent.color };
   const accentBorderStyle = { borderColor: accent.border };
+  const accentSolidStyle = { backgroundColor: accent.color, borderColor: accent.border };
+  const accentGhostStyle = { backgroundColor: '#232A31', borderColor: accent.border };
+  const accentTextColor = preferences.accentKey === 'blue' ? '#ffffff' : '#111827';
 
   async function savePreferences() {
     const persistedLogo = await persistLogoLocally(draftPreferences.logoSource, draftPreferences.logoLabel);
@@ -1477,7 +1480,7 @@ export default function BolsasScreen({
                   key={category.key}
                   onPress={() => setSelectedCategory(category.key)}
                   className={`flex-1 rounded-ind border px-3 py-3 ${active ? '' : 'border-industrial-border bg-industrial-bg'}`}
-                  style={active ? { borderColor: '#4D8BFF', backgroundColor: '#4D8BFF' } : undefined}
+                  style={active ? { borderColor: accent.border, backgroundColor: accent.color } : undefined}
                 >
                   <View className="items-center gap-2">
                     <MaterialCommunityIcons name={category.icon} size={18} color={active ? '#ffffff' : '#cbd5e1'} />
@@ -1523,7 +1526,7 @@ export default function BolsasScreen({
                     }))
                   }
                   className={`flex-1 rounded-ind px-3 py-3 ${drafts.bolsas.weightUnit === 'g' ? '' : 'bg-industrial-bg border border-industrial-border'}`}
-                  style={drafts.bolsas.weightUnit === 'g' ? { backgroundColor: '#4D8BFF', borderColor: '#4D8BFF' } : undefined}
+                  style={drafts.bolsas.weightUnit === 'g' ? { backgroundColor: accent.color, borderColor: accent.border } : undefined}
                 >
                   <Text className={`text-center text-sm font-semibold ${drafts.bolsas.weightUnit === 'g' ? 'text-white' : 'text-slate-300'}`}>
                     Gramos
@@ -1537,7 +1540,7 @@ export default function BolsasScreen({
                     }))
                   }
                   className={`flex-1 rounded-ind px-3 py-3 ${drafts.bolsas.weightUnit === 'kg' ? '' : 'bg-industrial-bg border border-industrial-border'}`}
-                  style={drafts.bolsas.weightUnit === 'kg' ? { backgroundColor: '#4D8BFF', borderColor: '#4D8BFF' } : undefined}
+                  style={drafts.bolsas.weightUnit === 'kg' ? { backgroundColor: accent.color, borderColor: accent.border } : undefined}
                 >
                   <Text className={`text-center text-sm font-semibold ${drafts.bolsas.weightUnit === 'kg' ? 'text-white' : 'text-slate-300'}`}>
                     Kilogramos
@@ -1585,7 +1588,7 @@ export default function BolsasScreen({
                         }))
                       }
                       className={`flex-1 rounded-ind px-3 py-3 ${active ? '' : 'bg-industrial-bg border border-industrial-border'}`}
-                      style={active ? { backgroundColor: '#4D8BFF', borderColor: '#4D8BFF' } : undefined}
+                      style={active ? { backgroundColor: accent.color, borderColor: accent.border } : undefined}
                     >
                       <Text className={`text-center text-sm font-semibold ${active ? 'text-white' : 'text-slate-300'}`}>
                         {unitLabel(unit)}
@@ -1599,12 +1602,12 @@ export default function BolsasScreen({
 
           <Pressable
             onPress={addMaterialToCurrentCategory}
-            className="mt-4 rounded-ind bg-industrial-primary px-4 py-4"
-            style={({ pressed }) => (pressed ? { opacity: 0.84 } : undefined)}
+            className="mt-4 rounded-ind border px-4 py-4"
+            style={({ pressed }) => [accentSolidStyle, pressed ? { opacity: 0.84 } : undefined]}
           >
             <View className="flex-row items-center justify-center gap-2">
-              <MaterialCommunityIcons name="playlist-plus" size={18} color="#1E2329" />
-              <Text className="text-center text-sm font-semibold uppercase tracking-[0.18em] text-[#1E2329]">
+              <MaterialCommunityIcons name="playlist-plus" size={18} color={accentTextColor} />
+              <Text className="text-center text-sm font-semibold uppercase tracking-[0.18em]" style={{ color: accentTextColor }}>
                 Agregar material en {categoryLabel(selectedCategory)}
               </Text>
             </View>
@@ -1675,12 +1678,12 @@ export default function BolsasScreen({
 
         <Pressable
           onPress={addToRequest}
-          className="mt-4 rounded-ind bg-industrial-primary px-4 py-4"
-          style={({ pressed }) => (pressed ? { opacity: 0.84 } : undefined)}
+          className="mt-4 rounded-ind border px-4 py-4"
+          style={({ pressed }) => [accentSolidStyle, pressed ? { opacity: 0.84 } : undefined]}
         >
           <View className="flex-row items-center justify-center gap-2">
-            <MaterialCommunityIcons name="plus-box" size={20} color="#1E2329" />
-            <Text className="text-center text-sm font-bold uppercase tracking-[0.18em] text-[#1E2329]">Agregar a la solicitud</Text>
+            <MaterialCommunityIcons name="plus-box" size={20} color={accentTextColor} />
+            <Text className="text-center text-sm font-bold uppercase tracking-[0.18em]" style={{ color: accentTextColor }}>Agregar a la solicitud</Text>
           </View>
         </Pressable>
 
@@ -1754,20 +1757,20 @@ export default function BolsasScreen({
             <View className="mt-2 flex-row gap-2">
               <Pressable
                 onPress={clearCart}
-                className="flex-1 rounded-ind border border-industrial-border px-3 py-3"
-                style={({ pressed }) => (pressed ? { opacity: 0.82 } : undefined)}
+                className="flex-1 rounded-ind border px-3 py-3"
+                style={({ pressed }) => [accentGhostStyle, pressed ? { opacity: 0.82 } : undefined]}
               >
-                <Text className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">Vaciar solicitud</Text>
+                <Text className="text-center text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: accent.soft }}>Vaciar solicitud</Text>
               </Pressable>
               <Pressable
                 disabled={!canSendEmail}
                 onPress={() => {
                   void sendCartByEmail();
                 }}
-                className={`flex-1 min-h-[46px] items-center justify-center rounded-ind border px-3 py-3 ${canSendEmail ? 'border-industrial-primary bg-industrial-primary' : 'border-[#55606B] bg-[#55606B]'}`}
-                style={({ pressed }) => (canSendEmail && pressed ? { opacity: 0.84 } : undefined)}
+                className={`flex-1 min-h-[46px] items-center justify-center rounded-ind border px-3 py-3 ${canSendEmail ? '' : 'border-[#55606B] bg-[#55606B]'}`}
+                style={({ pressed }) => [canSendEmail ? accentSolidStyle : undefined, canSendEmail && pressed ? { opacity: 0.84 } : undefined]}
               >
-                <Text className={`text-center text-xs font-semibold uppercase tracking-[0.16em] ${canSendEmail ? 'text-[#1E2329]' : 'text-zinc-300'}`}>
+                <Text className={`text-center text-xs font-semibold uppercase tracking-[0.16em] ${canSendEmail ? '' : 'text-zinc-300'}`} style={canSendEmail ? { color: accentTextColor } : undefined}>
                   {isSendingEmail ? 'Enviando...' : 'Enviar solicitud'}
                 </Text>
               </Pressable>
