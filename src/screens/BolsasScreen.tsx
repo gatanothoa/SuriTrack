@@ -1509,7 +1509,13 @@ export default function BolsasScreen({
                 [selectedCategory]: { ...current[selectedCategory], title: value },
               }))
             }
-            placeholder={selectedCategory === 'otros' ? 'Ej. Material genérico' : 'Ej. Bolsa reciclada 60x90'}
+            placeholder={
+              selectedCategory === 'otros'
+                ? 'Ej. Material genérico'
+                : selectedCategory === 'cajas'
+                  ? 'Ej. Caja corrugada 40x30'
+                  : 'Ej. Bolsa reciclada 60x90'
+            }
             placeholderTextColor="#64748b"
             className="mb-3 rounded-ind border border-industrial-border bg-industrial-bg px-3 py-3 text-white"
           />
@@ -1603,11 +1609,11 @@ export default function BolsasScreen({
           <Pressable
             onPress={addMaterialToCurrentCategory}
             className="mt-4 rounded-ind border px-4 py-4"
-            style={({ pressed }) => [accentSolidStyle, pressed ? { opacity: 0.84 } : undefined]}
+            style={accentSolidStyle}
           >
             <View className="flex-row items-center justify-center gap-2">
-              <MaterialCommunityIcons name="playlist-plus" size={18} color={accentTextColor} />
-              <Text className="text-center text-sm font-semibold uppercase tracking-[0.18em]" style={{ color: accentTextColor }}>
+              <MaterialCommunityIcons name="playlist-plus" size={18} color="#ffffff" />
+              <Text className="text-center text-sm font-semibold uppercase tracking-[0.18em] text-white">
                 Agregar material en {categoryLabel(selectedCategory)}
               </Text>
             </View>
@@ -1679,11 +1685,11 @@ export default function BolsasScreen({
         <Pressable
           onPress={addToRequest}
           className="mt-4 rounded-ind border px-4 py-4"
-          style={({ pressed }) => [accentSolidStyle, pressed ? { opacity: 0.84 } : undefined]}
+          style={accentSolidStyle}
         >
           <View className="flex-row items-center justify-center gap-2">
-            <MaterialCommunityIcons name="plus-box" size={20} color={accentTextColor} />
-            <Text className="text-center text-sm font-bold uppercase tracking-[0.18em]" style={{ color: accentTextColor }}>Agregar a la solicitud</Text>
+            <MaterialCommunityIcons name="plus-box" size={20} color="#ffffff" />
+            <Text className="text-center text-sm font-bold uppercase tracking-[0.18em] text-white">Agregar a la solicitud</Text>
           </View>
         </Pressable>
 
@@ -1758,9 +1764,9 @@ export default function BolsasScreen({
               <Pressable
                 onPress={clearCart}
                 className="flex-1 rounded-ind border px-3 py-3"
-                style={({ pressed }) => [accentGhostStyle, pressed ? { opacity: 0.82 } : undefined]}
+                style={accentSolidStyle}
               >
-                <Text className="text-center text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: accent.soft }}>Vaciar solicitud</Text>
+                <Text className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-white">Vaciar solicitud</Text>
               </Pressable>
               <Pressable
                 disabled={!canSendEmail}
@@ -1768,9 +1774,9 @@ export default function BolsasScreen({
                   void sendCartByEmail();
                 }}
                 className={`flex-1 min-h-[46px] items-center justify-center rounded-ind border px-3 py-3 ${canSendEmail ? '' : 'border-[#55606B] bg-[#55606B]'}`}
-                style={({ pressed }) => [canSendEmail ? accentSolidStyle : undefined, canSendEmail && pressed ? { opacity: 0.84 } : undefined]}
+                style={canSendEmail ? accentSolidStyle : accentGhostStyle}
               >
-                <Text className={`text-center text-xs font-semibold uppercase tracking-[0.16em] ${canSendEmail ? '' : 'text-zinc-300'}`} style={canSendEmail ? { color: accentTextColor } : undefined}>
+                <Text className={`text-center text-xs font-semibold uppercase tracking-[0.16em] ${canSendEmail ? 'text-white' : ''}`} style={!canSendEmail ? { color: accent.soft } : undefined}>
                   {isSendingEmail ? 'Enviando...' : 'Enviar solicitud'}
                 </Text>
               </Pressable>
