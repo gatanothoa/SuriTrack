@@ -44,15 +44,15 @@
       "favicon": "./assets/favicon.png"
     },
     "owner": "gatanothoa",
-    "extra": {
-      "eas": {
-        "projectId": "46fcade7-d2be-4fc4-a96e-386260f5dff4"
-      }
-    },
     "plugins": [
       "expo-mail-composer",
       "expo-asset",
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "db55c3a7-7800-44ca-960e-d80c0cc55331"
+      }
+    }
   }
 }
