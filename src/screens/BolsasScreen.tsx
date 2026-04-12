@@ -981,7 +981,6 @@ export default function BolsasScreen({
   const accent = ACCENT_PRESETS[preferences.accentKey];
   const accentStyle = { backgroundColor: accent.color };
   const accentBorderStyle = { borderColor: accent.border };
-  const primaryActionStyle = { backgroundColor: '#FFB020' };
 
   async function savePreferences() {
     const persistedLogo = await persistLogoLocally(draftPreferences.logoSource, draftPreferences.logoLabel);
@@ -1765,8 +1764,8 @@ export default function BolsasScreen({
                 onPress={() => {
                   void sendCartByEmail();
                 }}
-                className={`flex-1 rounded-ind px-3 py-3 ${canSendEmail ? '' : 'bg-[#55606B]'}`}
-                style={({ pressed }) => [canSendEmail ? primaryActionStyle : undefined, canSendEmail && pressed ? { opacity: 0.84 } : undefined]}
+                className={`flex-1 min-h-[46px] items-center justify-center rounded-ind border px-3 py-3 ${canSendEmail ? 'border-industrial-primary bg-industrial-primary' : 'border-[#55606B] bg-[#55606B]'}`}
+                style={({ pressed }) => (canSendEmail && pressed ? { opacity: 0.84 } : undefined)}
               >
                 <Text className={`text-center text-xs font-semibold uppercase tracking-[0.16em] ${canSendEmail ? 'text-[#1E2329]' : 'text-zinc-300'}`}>
                   {isSendingEmail ? 'Enviando...' : 'Enviar solicitud'}
