@@ -43,12 +43,12 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "owner": "gatanothoa",
     "extra": {
       "eas": {
-        "projectId": "ea80607e-61e3-4dee-99b0-04e741c43565"
+        "projectId": "46fcade7-d2be-4fc4-a96e-386260f5dff4"
       }
     },
-    "owner": "antcorcar",
     "plugins": [
       "expo-mail-composer",
       "expo-asset",
