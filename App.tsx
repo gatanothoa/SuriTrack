@@ -1,6 +1,6 @@
 import './global.css';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Image, StatusBar as RNStatusBar, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -45,6 +45,25 @@ function StartupLogo() {
 export default function App() {
   const [ready, setReady] = useState(false);
   const [headerPreferences, setHeaderPreferences] = useState<HeaderPreferences>(DEFAULT_HEADER_PREFERENCES);
+
+  const handleHeaderPreferencesChange = useCallback((nextPreferences: HeaderPreferences) => {
+    setHeaderPreferences((current) => {
+      if (
+        current.appName === nextPreferences.appName &&
+        current.headerSubtitle === nextPreferences.headerSubtitle &&
+        current.logoSource === nextPreferences.logoSource
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        appName: nextPreferences.appName,
+        headerSubtitle: nextPreferences.headerSubtitle,
+        logoSource: nextPreferences.logoSource,
+      };
+    });
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setReady(true), 1300);
@@ -119,16 +138,7 @@ export default function App() {
             </View>
           </View>
 
-          <BolsasScreen
-            onHeaderPreferencesChange={(nextPreferences) => {
-              setHeaderPreferences((current) => ({
-                ...current,
-                appName: nextPreferences.appName,
-                headerSubtitle: nextPreferences.headerSubtitle,
-                logoSource: nextPreferences.logoSource,
-              }));
-            }}
-          />
+          <BolsasScreen onHeaderPreferencesChange={handleHeaderPreferencesChange} />
         </View>
       </SafeAreaView>
     </SafeAreaProvider>

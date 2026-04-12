@@ -907,7 +907,7 @@ export default function BolsasScreen({
     return () => {
       isMounted = false;
     };
-  }, [onHeaderPreferencesChange]);
+  }, []);
 
   const currentMaterials = useMemo(
     () => materials.filter((item) => item.category === selectedCategory),
