@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  Linking,
   Platform,
   KeyboardAvoidingView,
   Pressable,
@@ -15,84 +14,32 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Asset } from 'expo-asset';
-import * as FileSystem from 'expo-file-system/legacy';
-import * as MailComposer from 'expo-mail-composer';
 import * as ImagePicker from 'expo-image-picker';
 import {
   calculateRequestedUnit,
   calculateRequestedValue,
-  convertFromKg,
   convertToKg,
   formatNumber,
-  formatPieces,
-  formatWeight,
   isNonEmptyPositive,
   parseOptionalPositiveNumber,
 } from '../utils/calculations';
-
-type MaterialCategory = 'bolsas' | 'cajas' | 'otros';
-type MaterialUnit = 'pieces' | 'kg' | 'g' | 'l';
-type MaterialCalcMode = 'bags' | 'pieces' | 'other';
-
-type MaterialOption = {
-  id: string;
-  category: MaterialCategory;
-  title: string;
-  calcMode: MaterialCalcMode;
-  requestValue: number;
-  requestUnit: MaterialUnit;
-  weightPer100Kg: number;
-  weightUnit: 'kg' | 'g';
-};
-
-type CartItem = {
-  id: string;
-  materialId: string;
-  materialTitle: string;
-  category: MaterialCategory;
-  calcMode: MaterialCalcMode;
-  requestValue: number;
-  requestUnit: MaterialUnit;
-  weightPer100Kg: number;
-  weightUnit: 'kg' | 'g';
-  calculatedValue: number;
-  calculatedUnit: MaterialUnit;
-  createdAt: string;
-};
-
-type StoredConfig = {
-  selectedCategory: MaterialCategory;
-  selectedMaterialId: string;
-  recipientEmail: string;
-  materials: MaterialOption[];
-  cartItems: CartItem[];
-  nextLeadNumber: number;
-  preferences: AppPreferences;
-};
-
-type MaterialDraft = {
-  title: string;
-  weightInput: string;
-  weightUnit: 'kg' | 'g';
-  otherUnit: 'kg' | 'g' | 'l';
-};
-
-type AccentKey = 'red' | 'blue' | 'green' | 'amber';
-
-type AppPreferences = {
-  appName: string;
-  headerSubtitle: string;
-  folioPrefix: string;
-  emailTemplate: string;
-  emailNote: string;
-  sheetNote: string;
-  logoSource: string;
-  logoLabel: string;
-  accentKey: AccentKey;
-};
-
-type HeaderPreferencesPayload = Pick<AppPreferences, 'appName' | 'headerSubtitle' | 'logoSource'>;
+import MaterialCard from '../components/MaterialCard';
+import ConfigRow from '../components/ConfigRow';
+import { persistLogoLocally, sendLogisticsEmail, stringToTemplateElements, templateElementsToString } from '../services/logisticsService';
+import type {
+  AccentKey,
+  AvailableField,
+  TemplateElement,
+  AppPreferences,
+  CartItem,
+  HeaderPreferencesPayload,
+  MaterialCalcMode,
+  MaterialCategory,
+  MaterialDraft,
+  MaterialOption,
+  MaterialUnit,
+  StoredConfig,
+} from '../types/logistics';
 
 const ACCENT_PRESETS: Record<AccentKey, { label: string; color: string; border: string; soft: string }> = {
   red: { label: 'Naranja', color: '#FFB020', border: '#FFB020', soft: '#FFD27A' },
@@ -104,10 +51,11 @@ const ACCENT_PRESETS: Record<AccentKey, { label: string; color: string; border: 
 const DEFAULT_PREFERENCES: AppPreferences = {
   appName: 'SurtiTrack',
   headerSubtitle: 'Solicitud logística corporativa',
+  themeMode: 'dark',
   folioPrefix: 'CS',
   emailTemplate: [
+    '{logo}',
     '{greeting}',
-    '',
     'Comparto la solicitud de material auxiliar.',
     '',
     'Folio: {folio}',
@@ -227,15 +175,6 @@ function getGreetingByHour(date: Date) {
   return 'Buenas noches equipo,';
 }
 
-function buildMailtoUrl(recipient: string, subject: string, body: string) {
-  const query = new URLSearchParams({
-    subject,
-    body,
-  }).toString();
-
-  return `mailto:${recipient}?${query}`;
-}
-
 function isValidEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
 }
@@ -253,23 +192,6 @@ async function triggerStatusFeedback(kind: 'success' | 'error') {
   await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
 }
 
-function sanitizeCsvCell(value: string) {
-  const normalized = value
-    .replace(/[\u0000-\u001F\u007F]+/g, ' ')
-    .replace(/[\r\n]+/g, ' ')
-    .trim();
-
-  if (!normalized) {
-    return '';
-  }
-
-  if (/^[=+\-@]/.test(normalized) || /^[\t ]+[=+\-@]/.test(normalized)) {
-    return `'${normalized}`;
-  }
-
-  return normalized;
-}
-
 function normalizePreferenceText(value: string, fallback: string) {
   const normalized = value.trim();
   return normalized || fallback;
@@ -279,6 +201,7 @@ function preferencesAreEqual(left: AppPreferences, right: AppPreferences) {
   return (
     left.appName === right.appName &&
     left.headerSubtitle === right.headerSubtitle &&
+    left.themeMode === right.themeMode &&
     left.folioPrefix === right.folioPrefix &&
     left.emailTemplate === right.emailTemplate &&
     left.emailNote === right.emailNote &&
@@ -287,234 +210,6 @@ function preferencesAreEqual(left: AppPreferences, right: AppPreferences) {
     left.logoLabel === right.logoLabel &&
     left.accentKey === right.accentKey
   );
-}
-
-function renderEmailTemplate(template: string, context: { greeting: string; folio: string; totalMaterials: string; totalPieces: string; totalKg: string; attachmentNote: string; emailNote: string }) {
-  return template
-    .replace(/\{greeting\}/g, context.greeting)
-    .replace(/\{folio\}/g, context.folio)
-    .replace(/\{totalMaterials\}/g, context.totalMaterials)
-    .replace(/\{totalPieces\}/g, context.totalPieces)
-    .replace(/\{totalKg\}/g, context.totalKg)
-    .replace(/\{attachmentNote\}/g, context.attachmentNote)
-    .replace(/\{emailNote\}/g, context.emailNote);
-}
-
-function getLogoExtension(sourceUri: string, fileName?: string) {
-  const nameExtension = fileName?.split('.').pop()?.trim().toLowerCase();
-
-  if (nameExtension === 'jpeg') {
-    return 'jpg';
-  }
-
-  if (nameExtension && nameExtension.length <= 5) {
-    return nameExtension;
-  }
-
-  const dataUriMatch = sourceUri.match(/^data:image\/([a-zA-Z0-9.+-]+);base64,/i);
-
-  if (dataUriMatch?.[1]) {
-    const dataExtension = dataUriMatch[1].toLowerCase();
-    return dataExtension === 'jpeg' ? 'jpg' : dataExtension;
-  }
-
-  return 'png';
-}
-
-async function persistLogoLocally(sourceUri: string, fileName?: string) {
-  const normalized = sourceUri.trim();
-
-  if (!normalized) {
-    return { logoSource: '', logoLabel: DEFAULT_PREFERENCES.logoLabel };
-  }
-
-  const label = normalizePreferenceText(fileName ?? '', DEFAULT_PREFERENCES.logoLabel);
-
-  if (Platform.OS === 'web') {
-    return {
-      logoSource: normalized,
-      logoLabel: label,
-    };
-  }
-
-  const localDirectory = FileSystem.documentDirectory ?? FileSystem.cacheDirectory;
-
-  if (!localDirectory) {
-    return {
-      logoSource: normalized,
-      logoLabel: label,
-    };
-  }
-
-  if (normalized.startsWith(localDirectory)) {
-    return {
-      logoSource: normalized,
-      logoLabel: label,
-    };
-  }
-
-  const extension = getLogoExtension(normalized, fileName);
-  const targetUri = `${localDirectory}company-logo-${Date.now()}.${extension}`;
-
-  try {
-    if (normalized.startsWith('data:image/')) {
-      const base64 = normalized.replace(/^data:image\/[a-zA-Z0-9.+-]+;base64,/, '');
-
-      await FileSystem.writeAsStringAsync(targetUri, base64, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-
-      return {
-        logoSource: targetUri,
-        logoLabel: label,
-      };
-    }
-
-    if (/^https?:\/\//i.test(normalized)) {
-      const downloaded = await FileSystem.downloadAsync(normalized, targetUri);
-
-      return {
-        logoSource: downloaded.uri,
-        logoLabel: label,
-      };
-    }
-
-    if (normalized.startsWith('file://') || normalized.startsWith('content://')) {
-      try {
-        await FileSystem.copyAsync({ from: normalized, to: targetUri });
-
-        return {
-          logoSource: targetUri,
-          logoLabel: label,
-        };
-      } catch {
-        const base64 = await FileSystem.readAsStringAsync(normalized, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-
-        await FileSystem.writeAsStringAsync(targetUri, base64, {
-          encoding: FileSystem.EncodingType.Base64,
-        });
-
-        return {
-          logoSource: targetUri,
-          logoLabel: label,
-        };
-      }
-    }
-  } catch {
-    return {
-      logoSource: normalized,
-      logoLabel: label,
-    };
-  }
-
-  return {
-    logoSource: normalized,
-    logoLabel: label,
-  };
-}
-
-async function resolveLogoAsDataUri(logoSource: string) {
-  let source = logoSource.trim();
-
-  try {
-    if (!source) {
-      const logoAsset = Asset.fromModule(require('../../assets/logo.png'));
-      await logoAsset.downloadAsync();
-      source = logoAsset.localUri ?? logoAsset.uri;
-    }
-
-    if (source.startsWith('data:image/')) {
-      return source;
-    }
-
-    const baseDirectory = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
-
-    if (/^https?:\/\//i.test(source)) {
-      if (!baseDirectory) {
-        return null;
-      }
-
-      const extension = getLogoExtension(source);
-      const downloadTarget = `${baseDirectory}mail-logo-${Date.now()}.${extension}`;
-      const downloaded = await FileSystem.downloadAsync(source, downloadTarget);
-      source = downloaded.uri;
-    }
-
-    if (source.startsWith('content://')) {
-      if (!baseDirectory) {
-        return null;
-      }
-
-      const extension = getLogoExtension(source);
-      const copyTarget = `${baseDirectory}mail-logo-content-${Date.now()}.${extension}`;
-
-      try {
-        await FileSystem.copyAsync({ from: source, to: copyTarget });
-        source = copyTarget;
-      } catch {
-        return null;
-      }
-    }
-
-    const base64 = await FileSystem.readAsStringAsync(source, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
-    const extension = getLogoExtension(source);
-    const mimeSubType = extension === 'jpg' ? 'jpeg' : extension;
-
-    return `data:image/${mimeSubType};base64,${base64}`;
-  } catch {
-    return null;
-  }
-}
-
-function escapeHtml(text: string) {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-function buildCsv(items: CartItem[], requestCode: string, preferences: AppPreferences, generatedAt: Date) {
-  const headers = [
-    'FOLIO',
-    'CATEGORIA',
-    'DESCRIPCION',
-    'MODO',
-    'CANTIDAD SOLICITADA',
-    'UNIDAD SOLICITADA',
-    'PESO CALCULADO',
-    'UNIDAD RESULTADO',
-    'FECHA REGISTRO',
-  ];
-
-  const metadataRows = [
-    ['EMPRESA', preferences.appName],
-    ['SUBTITULO', preferences.headerSubtitle],
-    ['FECHA GENERACION', generatedAt.toLocaleString('es-MX')],
-    ['NOTA', preferences.sheetNote],
-  ];
-
-  const rows = items.map((item) => [
-    requestCode,
-    categoryLabel(item.category),
-    item.materialTitle,
-    modeLabel(item.calcMode),
-    formatNumber(item.requestValue),
-    unitLabel(item.requestUnit),
-    formatNumber(item.calculatedValue),
-    unitLabel(item.calculatedUnit),
-    new Date(item.createdAt).toLocaleString('es-MX'),
-  ]);
-
-  return [...metadataRows, [], headers, ...rows]
-    .map((columns) => columns.map((column) => `"${sanitizeCsvCell(String(column)).replace(/"/g, '""')}"`).join(','))
-    .join('\n');
 }
 
 function createMaterialTemplate(category: MaterialCategory, index: number, requestUnit: MaterialUnit = 'kg'): MaterialOption {
@@ -555,161 +250,6 @@ function createMaterialTemplate(category: MaterialCategory, index: number, reque
   };
 }
 
-function MaterialCard({
-  option,
-  selected,
-  accent,
-  onPress,
-}: {
-  option: MaterialOption;
-  selected: boolean;
-  accent: { color: string; border: string; soft: string };
-  onPress: () => void;
-}) {
-  const resultValue = calculateRequestedValue(option);
-  const resultUnit = calculateRequestedUnit(option);
-
-  return (
-    <Pressable
-      onPress={onPress}
-      className={`mb-2 rounded-ind border px-3 py-3 ${selected ? 'bg-[#2F3740]' : 'border-industrial-border bg-industrial-surface'}`}
-      style={({ pressed }) => [selected ? { borderColor: accent.border } : undefined, pressed ? { opacity: 0.82 } : undefined]}
-    >
-      <View className="flex-row items-start justify-between gap-4">
-        <View className="flex-1">
-          <View className="flex-row items-center gap-2">
-            <View className="items-center justify-center rounded-ind border border-industrial-border bg-industrial-bg px-2 py-2">
-              <MaterialCommunityIcons name={categoryIcon(option.category)} size={18} color={accent.color} />
-            </View>
-            <View className="flex-1">
-              <Text className={`text-base font-semibold ${selected ? 'text-white' : 'text-slate-100'}`}>{option.title || 'Material sin nombre'}</Text>
-              <Text className="text-[11px] uppercase tracking-[0.16em] text-industrial-muted">{categoryLabel(option.category)}</Text>
-            </View>
-          </View>
-
-          <View className="mt-2 flex-row flex-wrap gap-1.5">
-            <View className="rounded-ind border border-industrial-border bg-industrial-bg px-2 py-1">
-              <Text className="text-[11px] font-medium text-industrial-muted">{modeLabel(option.calcMode)}</Text>
-            </View>
-            <View className="rounded-ind border border-industrial-border bg-industrial-bg px-2 py-1">
-              <Text className="text-[11px] font-medium text-industrial-muted">Unidad: {unitLabel(option.requestUnit)}</Text>
-            </View>
-          </View>
-        </View>
-
-        <View className="items-end">
-          <Text className="text-[10px] uppercase tracking-[0.18em] text-industrial-muted">{getResultLabel(option)}</Text>
-          <Text className={`mt-1 text-2xl font-bold ${selected ? 'text-white' : 'text-slate-100'}`}>
-            {formatNumber(resultValue)}
-          </Text>
-          <Text className="text-xs font-medium" style={{ color: accent.soft }}>{unitLabel(resultUnit)}</Text>
-        </View>
-      </View>
-    </Pressable>
-  );
-}
-
-function ConfigRow({
-  item,
-  accent,
-  onChange,
-  onDelete,
-}: {
-  item: MaterialOption;
-  accent: { color: string; border: string; soft: string };
-  onChange: (id: string, patch: Partial<MaterialOption>) => void;
-  onDelete: (id: string) => void;
-}) {
-  const invalidWeight = item.calcMode === 'bags' && item.weightPer100Kg <= 0;
-  const displayWeight = convertFromKg(item.weightPer100Kg, item.weightUnit);
-
-  return (
-    <View className="mb-3 rounded-ind border border-industrial-border bg-industrial-surface px-3 py-3">
-      <View className="mb-3 flex-row items-center justify-between">
-        <View className="flex-row items-center gap-2">
-          <MaterialCommunityIcons name={categoryIcon(item.category)} size={16} color={accent.color} />
-          <Text className="text-sm font-semibold text-slate-100">{item.title || 'Material'}</Text>
-        </View>
-        <Pressable onPress={() => onDelete(item.id)} className="rounded-ind border px-3 py-1" style={{ borderColor: accent.border }}>
-          <Text className="text-xs font-semibold" style={{ color: accent.soft }}>Eliminar</Text>
-        </Pressable>
-      </View>
-
-      <Text className="mb-1 text-xs text-slate-400">Nombre</Text>
-      <TextInput
-        value={item.title}
-        onChangeText={(value) => onChange(item.id, { title: value })}
-        placeholder="Nombre del material"
-        placeholderTextColor="#64748b"
-        className="mb-3 rounded-ind border border-industrial-border bg-industrial-bg px-3 py-3 text-white"
-      />
-
-      {item.calcMode === 'bags' ? (
-        <>
-          <Text className="mb-1 text-xs text-slate-400">Unidad base del peso</Text>
-          <View className="mb-3 flex-row gap-2">
-            <Pressable
-              onPress={() => onChange(item.id, { weightUnit: 'g' })}
-              className={`flex-1 rounded-ind px-3 py-3 ${item.weightUnit === 'g' ? '' : 'bg-industrial-bg border border-industrial-border'}`}
-              style={item.weightUnit === 'g' ? { backgroundColor: accent.color, borderColor: accent.border } : undefined}
-            >
-              <Text className={`text-center text-sm font-semibold ${item.weightUnit === 'g' ? 'text-white' : 'text-slate-300'}`}>Gramos</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => onChange(item.id, { weightUnit: 'kg' })}
-              className={`flex-1 rounded-ind px-3 py-3 ${item.weightUnit === 'kg' ? '' : 'bg-industrial-bg border border-industrial-border'}`}
-              style={item.weightUnit === 'kg' ? { backgroundColor: accent.color, borderColor: accent.border } : undefined}
-            >
-              <Text className={`text-center text-sm font-semibold ${item.weightUnit === 'kg' ? 'text-white' : 'text-slate-300'}`}>Kilogramos</Text>
-            </Pressable>
-          </View>
-
-          <Text className="mb-1 text-xs text-slate-400">Peso por 100 piezas ({item.weightUnit})</Text>
-          <TextInput
-            value={displayWeight ? String(displayWeight) : ''}
-            onChangeText={(value) => {
-              const parsed = parseOptionalPositiveNumber(value);
-              onChange(item.id, { weightPer100Kg: convertToKg(parsed, item.weightUnit) });
-            }}
-            keyboardType="decimal-pad"
-            placeholder={item.weightUnit === 'g' ? 'Ej. 450' : 'Ej. 0.450'}
-            placeholderTextColor="#64748b"
-            className={`rounded-ind border px-3 py-3 text-white ${invalidWeight ? 'border-[#FFB020] bg-[#2a151a]' : 'border-industrial-border bg-industrial-bg'}`}
-          />
-        </>
-      ) : null}
-
-      {item.calcMode === 'other' ? (
-        <>
-          <Text className="mb-1 text-xs text-slate-400">Unidad de solicitud</Text>
-          <View className="flex-row gap-2">
-            {(['l', 'kg', 'g'] as const).map((unit) => {
-              const active = item.requestUnit === unit;
-
-              return (
-                <Pressable
-                  key={unit}
-                  onPress={() => onChange(item.id, { requestUnit: unit })}
-                  className={`flex-1 rounded-ind px-3 py-3 ${active ? '' : 'bg-industrial-bg border border-industrial-border'}`}
-                  style={active ? { backgroundColor: accent.color, borderColor: accent.border } : undefined}
-                >
-                  <Text className={`text-center text-sm font-semibold ${active ? 'text-white' : 'text-slate-300'}`}>{unitLabel(unit)}</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </>
-      ) : null}
-
-      {item.calcMode === 'pieces' ? (
-        <View className="mt-1 rounded-ind border border-industrial-border bg-industrial-bg px-3 py-2">
-          <Text className="text-xs text-slate-400">Se solicitará por piezas.</Text>
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
 export default function BolsasScreen({
   onHeaderPreferencesChange,
 }: {
@@ -725,9 +265,11 @@ export default function BolsasScreen({
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusType, setStatusType] = useState<'success' | 'error' | null>(null);
-  const [nextLeadNumber, setNextLeadNumber] = useState(0);
+  const [nextLeadNumber, setNextLeadNumber] = useState(1);
   const [preferences, setPreferences] = useState<AppPreferences>(DEFAULT_PREFERENCES);
   const [draftPreferences, setDraftPreferences] = useState<AppPreferences>(DEFAULT_PREFERENCES);
+  const [templateElements, setTemplateElements] = useState<TemplateElement[]>([]);
+  const [draftTemplateElements, setDraftTemplateElements] = useState<TemplateElement[]>([]);
   const [drafts, setDrafts] = useState<Record<MaterialCategory, MaterialDraft>>({
     bolsas: { title: '', weightInput: '', weightUnit: 'g', otherUnit: 'kg' },
     cajas: { title: '', weightInput: '', weightUnit: 'kg', otherUnit: 'kg' },
@@ -764,6 +306,9 @@ export default function BolsasScreen({
         }
 
         if (!storedValue) {
+          const defaultElements = stringToTemplateElements(DEFAULT_PREFERENCES.emailTemplate as string);
+          setTemplateElements(defaultElements);
+          setDraftTemplateElements(defaultElements);
           setIsLoading(false);
           return;
         }
@@ -837,11 +382,30 @@ export default function BolsasScreen({
           );
         }
 
-        if (typeof parsed.nextLeadNumber === 'number' && parsed.nextLeadNumber >= 0) {
+        if (typeof parsed.nextLeadNumber === 'number' && parsed.nextLeadNumber >= 1) {
           setNextLeadNumber(parsed.nextLeadNumber);
         }
 
         if (parsed.preferences) {
+          let logoSourceToUse = DEFAULT_PREFERENCES.logoSource;
+          
+          // En web, intentar recuperar logo desde sessionStorage
+          if (Platform.OS === 'web' && typeof sessionStorage !== 'undefined') {
+            try {
+              const storedLogoDataUri = sessionStorage.getItem('calcpack.logo.datauri');
+              if (storedLogoDataUri && storedLogoDataUri.startsWith('data:image/')) {
+                logoSourceToUse = storedLogoDataUri;
+              }
+            } catch {
+              // Si sessionStorage falla, usar el del AsyncStorage
+            }
+          }
+          
+          // Si no hay logo en sessionStorage, usar el del AsyncStorage
+          if (!logoSourceToUse && typeof parsed.preferences.logoSource === 'string' && parsed.preferences.logoSource.trim()) {
+            logoSourceToUse = parsed.preferences.logoSource.trim();
+          }
+          
           const nextPreferences: AppPreferences = {
             appName:
               typeof parsed.preferences.appName === 'string' && parsed.preferences.appName.trim()
@@ -851,6 +415,7 @@ export default function BolsasScreen({
               typeof parsed.preferences.headerSubtitle === 'string' && parsed.preferences.headerSubtitle.trim()
                 ? parsed.preferences.headerSubtitle.trim()
                 : DEFAULT_PREFERENCES.headerSubtitle,
+            themeMode: parsed.preferences.themeMode === 'light' ? 'light' : DEFAULT_PREFERENCES.themeMode,
             folioPrefix:
               typeof parsed.preferences.folioPrefix === 'string' && parsed.preferences.folioPrefix.trim()
                 ? sanitizeFolioPrefix(parsed.preferences.folioPrefix)
@@ -867,10 +432,7 @@ export default function BolsasScreen({
               typeof parsed.preferences.sheetNote === 'string' && parsed.preferences.sheetNote.trim()
                 ? parsed.preferences.sheetNote.trim()
                 : DEFAULT_PREFERENCES.sheetNote,
-            logoSource:
-              typeof parsed.preferences.logoSource === 'string' && parsed.preferences.logoSource.trim()
-                ? parsed.preferences.logoSource.trim()
-                : DEFAULT_PREFERENCES.logoSource,
+            logoSource: logoSourceToUse,
             logoLabel:
               typeof parsed.preferences.logoLabel === 'string' && parsed.preferences.logoLabel.trim()
                 ? parsed.preferences.logoLabel.trim()
@@ -887,7 +449,14 @@ export default function BolsasScreen({
             appName: nextPreferences.appName,
             headerSubtitle: nextPreferences.headerSubtitle,
             logoSource: nextPreferences.logoSource,
+            themeMode: nextPreferences.themeMode,
           });
+          
+          // Convertir el template string a elementos
+          const templateStr = typeof nextPreferences.emailTemplate === 'string' ? nextPreferences.emailTemplate : DEFAULT_PREFERENCES.emailTemplate;
+          const elements = typeof templateStr === 'string' ? stringToTemplateElements(templateStr as string) : templateStr;
+          setTemplateElements(elements);
+          setDraftTemplateElements(elements);
         }
 
         setStatusMessage('Configuracion cargada');
@@ -952,8 +521,10 @@ export default function BolsasScreen({
   );
 
   const hasPendingPreferenceChanges = useMemo(
-    () => !preferencesAreEqual(preferences, draftPreferences),
-    [draftPreferences, preferences]
+    () =>
+      !preferencesAreEqual(preferences, draftPreferences) ||
+      templateElementsToString(templateElements) !== templateElementsToString(draftTemplateElements),
+    [draftPreferences, draftTemplateElements, preferences, templateElements]
   );
 
   useEffect(() => {
@@ -979,33 +550,112 @@ export default function BolsasScreen({
   }, [cartItems, isLoading, materials, nextLeadNumber, preferences, recipientEmail, selectedCategory, selectedMaterialId]);
 
   const accent = ACCENT_PRESETS[preferences.accentKey];
-  const accentStyle = { backgroundColor: accent.color };
-  const accentBorderStyle = { borderColor: accent.border };
-  const accentSolidStyle = { backgroundColor: accent.color, borderColor: accent.border };
-  const accentGhostStyle = { backgroundColor: '#232A31', borderColor: accent.border };
-  const accentTextColor = preferences.accentKey === 'blue' ? '#ffffff' : '#111827';
+  const isLightMode = draftPreferences.themeMode === 'light';
+  const themeColors = isLightMode
+    ? {
+        pageBg: '#EAF1F7',
+        cardBg: '#F7FAFD',
+        panelBg: '#FFFFFF',
+        border: '#CBD6E2',
+        text: '#0F172A',
+        muted: '#475569',
+        inputBg: '#FFFFFF',
+        chipTextBg: '#F1F5F9',
+        chipTextBorder: '#C9D4E1',
+        chipFieldBg: '#2563EB',
+        chipFieldBorder: '#1D4ED8',
+        buttonText: '#0F172A',
+        buttonTextOnAccent: '#0F172A',
+        buttonOutlineBg: '#FFFFFF',
+        buttonOutlineBorder: '#B8C7D6',
+        buttonGhostBg: '#EEF3F8',
+        buttonGhostBorder: '#C6D3E0',
+        statusOkText: '#0F766E',
+      }
+    : {
+        pageBg: '#1E2329',
+        cardBg: '#232A31',
+        panelBg: '#1E2329',
+        border: '#3A434D',
+        text: '#F8FAFC',
+        muted: '#94A3B8',
+        inputBg: '#232A31',
+        chipTextBg: '#1E2329',
+        chipTextBorder: '#3A434D',
+        chipFieldBg: '#2563EB',
+        chipFieldBorder: '#1D4ED8',
+          buttonText: '#F8FAFC',
+          buttonTextOnAccent: '#FFFFFF',
+          buttonOutlineBg: '#232A31',
+          buttonOutlineBorder: '#3A434D',
+          buttonGhostBg: '#232A31',
+          buttonGhostBorder: '#55606B',
+          statusOkText: '#34D399',
+      };
+        const accentStyle = { backgroundColor: accent.color };
+        const accentBorderStyle = { borderColor: accent.border };
+        const accentSolidStyle = { backgroundColor: accent.color, borderColor: accent.border };
+        const accentGhostStyle = { backgroundColor: themeColors.buttonGhostBg, borderColor: themeColors.buttonGhostBorder };
+        const outlineButtonStyle = { backgroundColor: themeColors.buttonOutlineBg, borderColor: themeColors.buttonOutlineBorder };
+  const panelStyle = { backgroundColor: themeColors.panelBg, borderColor: themeColors.border };
+  const inputFieldStyle = { backgroundColor: themeColors.inputBg, borderColor: themeColors.border, color: themeColors.text };
+
+  function addFieldToTemplate(fieldName: AvailableField) {
+    // Agregar el campo al final del template actual
+    setDraftTemplateElements((current) => [
+      ...current,
+      { type: 'field', name: fieldName }
+    ]);
+  }
+
+  function removeElementFromTemplate(index: number) {
+    // Remover un elemento en particular
+    setDraftTemplateElements((current) => current.filter((_, i) => i !== index));
+  }
+
+  function updateTextElement(index: number, content: string) {
+    // Actualizar el contenido de un elemento de texto
+    setDraftTemplateElements((current) => 
+      current.map((element, i) => 
+        i === index && element.type === 'text' 
+          ? { ...element, content } 
+          : element
+      )
+    );
+  }
+
+  function addTextBlockToTemplate() {
+    setDraftTemplateElements((current) => [...current, { type: 'text', content: 'Nuevo texto' }]);
+  }
 
   async function savePreferences() {
-    const persistedLogo = await persistLogoLocally(draftPreferences.logoSource, draftPreferences.logoLabel);
+    const persistedLogo = await persistLogoLocally(draftPreferences.logoSource, draftPreferences.logoLabel, DEFAULT_PREFERENCES.logoLabel);
 
     const nextPreferences: AppPreferences = {
       appName: normalizePreferenceText(draftPreferences.appName, DEFAULT_PREFERENCES.appName),
       headerSubtitle: normalizePreferenceText(draftPreferences.headerSubtitle, DEFAULT_PREFERENCES.headerSubtitle),
+      themeMode: draftPreferences.themeMode === 'light' ? 'light' : 'dark',
       folioPrefix: sanitizeFolioPrefix(draftPreferences.folioPrefix),
-      emailTemplate: normalizePreferenceText(draftPreferences.emailTemplate, DEFAULT_PREFERENCES.emailTemplate),
+      emailTemplate: templateElementsToString(draftTemplateElements),
       emailNote: normalizePreferenceText(draftPreferences.emailNote, DEFAULT_PREFERENCES.emailNote),
       sheetNote: normalizePreferenceText(draftPreferences.sheetNote, DEFAULT_PREFERENCES.sheetNote),
-      logoSource: persistedLogo.logoSource,
+      // En web, NO guardar data URI completo en AsyncStorage (es muy grande); se guarda en sessionStorage
+      logoSource: Platform.OS === 'web' && persistedLogo.logoSource.startsWith('data:image/') 
+        ? '' 
+        : persistedLogo.logoSource,
       logoLabel: normalizePreferenceText(persistedLogo.logoLabel, DEFAULT_PREFERENCES.logoLabel),
       accentKey: ACCENT_PRESETS[draftPreferences.accentKey] ? draftPreferences.accentKey : DEFAULT_PREFERENCES.accentKey,
     };
 
     setPreferences(nextPreferences);
     setDraftPreferences(nextPreferences);
+    setTemplateElements(draftTemplateElements);
+    setDraftTemplateElements(draftTemplateElements);
     onHeaderPreferencesChange?.({
       appName: nextPreferences.appName,
       headerSubtitle: nextPreferences.headerSubtitle,
-      logoSource: nextPreferences.logoSource,
+      logoSource: persistedLogo.logoSource, // Pasar el logo real (desde sessionStorage o FileSystem) al header
+      themeMode: nextPreferences.themeMode,
     });
     setStatusMessage('Cambios de marca guardados.');
     setStatusType('success');
@@ -1074,7 +724,7 @@ export default function BolsasScreen({
     }
 
     const asset = result.assets[0];
-    const persistedLogo = await persistLogoLocally(asset.uri, asset.fileName ?? undefined);
+    const persistedLogo = await persistLogoLocally(asset.uri, asset.fileName ?? undefined, DEFAULT_PREFERENCES.logoLabel);
 
     setDraftPreferences((current) => ({
       ...current,
@@ -1248,172 +898,21 @@ export default function BolsasScreen({
 
     try {
       setIsSendingEmail(true);
-      const now = new Date();
       const requestCode = buildRequestCode(preferences.folioPrefix, nextLeadNumber);
-      const totalItems = cartItems.length;
-      const totalPieces = cartItems.reduce((sum, item) => sum + Math.ceil(item.requestValue), 0);
-      const totalKg = cartItems.reduce((sum, item) => sum + (item.calculatedUnit === 'kg' ? item.calculatedValue : 0), 0);
-
-      const attachmentSupported = Platform.OS !== 'web';
-      const body = renderEmailTemplate(preferences.emailTemplate, {
-        greeting: getGreetingByHour(now),
-        folio: requestCode,
-        totalMaterials: String(totalItems),
-        totalPieces: formatPieces(totalPieces),
-        totalKg: formatWeight(totalKg),
-        attachmentNote: attachmentSupported
-          ? 'En el archivo adjunto encontraran el detalle por tipo de material.'
-          : 'En web no se adjunta archivo automaticamente; revisa el resumen del correo para generar la solicitud.',
-        emailNote: preferences.emailNote,
+      const result = await sendLogisticsEmail({
+        recipientEmail,
+        requestCode,
+        cartItems,
+        preferences,
+        greeting: getGreetingByHour(new Date()),
       });
-      const subject = `Solicitud de material auxiliar ${requestCode} ${now.toLocaleDateString('es-MX')}`;
 
-      if (Platform.OS === 'web') {
-        const mailtoUrl = buildMailtoUrl(recipientEmail.trim(), subject, body);
-        const canOpen = await Linking.canOpenURL(mailtoUrl);
-
-        if (!canOpen) {
-          setStatusMessage('No se detecto cliente de correo en el navegador.');
-          setStatusType('error');
-          return;
-        }
-
-        await Linking.openURL(mailtoUrl);
+      if (result.reserveFolio) {
         setNextLeadNumber((current) => current + 1);
-        setStatusMessage('Correo abierto. Folio reservado para evitar duplicados en web.');
-        setStatusType('success');
-        return;
       }
 
-      const available = await MailComposer.isAvailableAsync();
-
-      if (!available) {
-        const mailtoUrl = buildMailtoUrl(recipientEmail.trim(), subject, body);
-        const canOpen = await Linking.canOpenURL(mailtoUrl);
-
-        if (!canOpen) {
-          setStatusMessage('No hay app de correo disponible en este dispositivo.');
-          setStatusType('error');
-          return;
-        }
-
-        await Linking.openURL(mailtoUrl);
-        setStatusMessage('Se abrio la app de correo sin adjunto.');
-        setStatusType('success');
-        return;
-      }
-
-      const csv = buildCsv(cartItems, requestCode, preferences, now);
-      const fileName = `Solicitud_material_auxiliar_${requestCode}_${now.toISOString().slice(0, 10)}.csv`;
-      const baseDirectory = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
-
-      if (!baseDirectory) {
-        setStatusMessage('No se pudo acceder al almacenamiento temporal para el adjunto.');
-        setStatusType('error');
-        return;
-      }
-
-      const fileUri = `${baseDirectory}${fileName}`;
-      await FileSystem.writeAsStringAsync(fileUri, csv, {
-        encoding: FileSystem.EncodingType.UTF8,
-      });
-
-      const logoDataUri = await resolveLogoAsDataUri(preferences.logoSource);
-
-      const previewRows = cartItems.slice(0, 5);
-      const detailRowsHtml = previewRows
-        .map(
-          (item) => `
-            <tr>
-              <td style="padding:8px 10px; border:1px solid #d1d5db; font-size:12px; color:#111827;">${escapeHtml(item.materialTitle)}</td>
-              <td style="padding:8px 10px; border:1px solid #d1d5db; font-size:12px; color:#111827;">${escapeHtml(categoryLabel(item.category))}</td>
-              <td style="padding:8px 10px; border:1px solid #d1d5db; font-size:12px; color:#111827; text-align:right;">${escapeHtml(formatNumber(item.requestValue))}</td>
-              <td style="padding:8px 10px; border:1px solid #d1d5db; font-size:12px; color:#111827; text-align:right;">${escapeHtml(formatNumber(item.calculatedValue))}</td>
-            </tr>
-          `
-        )
-        .join('');
-
-      const htmlBody = `
-        <div style="font-family: Arial, Helvetica, sans-serif; background:#f3f4f6; padding:0; margin:0; color:#111827;">
-          <div style="max-width:760px; margin:0 auto; background:#ffffff; border:1px solid #d1d5db;">
-            <div style="background:#1E2329; padding:14px 16px; display:flex; align-items:center; justify-content:space-between; gap:10px;">
-              <div style="display:flex; align-items:center; gap:10px;">
-                ${logoDataUri ? `<img src="${logoDataUri}" alt="${escapeHtml(preferences.appName)}" style="height:34px; max-width:120px; object-fit:contain; background:#ffffff; padding:2px 4px; border-radius:4px;" />` : `<span style="color:#F3F5F7; font-size:16px; font-weight:700; letter-spacing:0.04em;">${escapeHtml(preferences.appName)}</span>`}
-              </div>
-              <div style="background:#FFB020; color:#1E2329; font-weight:700; font-size:12px; padding:4px 8px; border-radius:4px;">FOLIO ${escapeHtml(requestCode)}</div>
-            </div>
-
-            <div style="padding:16px;">
-              <p style="margin:0 0 10px 0; font-size:13px; color:#374151;">${escapeHtml(getGreetingByHour(now))}</p>
-              <p style="margin:0 0 14px 0; font-size:13px; color:#374151;">Comparto la solicitud de material auxiliar.</p>
-
-              <table style="width:100%; border-collapse:collapse; margin:0 0 14px 0;">
-                <thead>
-                  <tr>
-                    <th colspan="2" style="text-align:left; background:#f9fafb; border:1px solid #d1d5db; padding:8px 10px; font-size:12px; letter-spacing:0.06em; color:#374151;">RESUMEN EJECUTIVO</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td style="width:45%; border:1px solid #d1d5db; padding:8px 10px; font-size:12px; color:#6b7280;">Folio</td>
-                    <td style="border:1px solid #d1d5db; padding:8px 10px; font-size:13px; font-weight:700; color:#1f2937;">${escapeHtml(requestCode)}</td>
-                  </tr>
-                  <tr>
-                    <td style="border:1px solid #d1d5db; padding:8px 10px; font-size:12px; color:#6b7280;">Total de Materiales</td>
-                    <td style="border:1px solid #d1d5db; padding:8px 10px; font-size:13px; font-weight:600; color:#1f2937;">${escapeHtml(String(totalItems))}</td>
-                  </tr>
-                  <tr>
-                    <td style="border:1px solid #d1d5db; padding:8px 10px; font-size:12px; color:#6b7280;">Total de Piezas</td>
-                    <td style="border:1px solid #d1d5db; padding:8px 10px; font-size:13px; font-weight:600; color:#1f2937;">${escapeHtml(formatPieces(totalPieces))}</td>
-                  </tr>
-                  <tr>
-                    <td style="border:1px solid #d1d5db; padding:8px 10px; font-size:12px; color:#6b7280;">Total de Kilos</td>
-                    <td style="border:1px solid #d1d5db; padding:8px 10px; font-size:13px; font-weight:600; color:#1f2937;">${escapeHtml(formatWeight(totalKg))} kg</td>
-                  </tr>
-                </tbody>
-              </table>
-
-              <table style="width:100%; border-collapse:collapse; margin:0 0 12px 0;">
-                <thead>
-                  <tr>
-                    <th colspan="4" style="text-align:left; background:#f9fafb; border:1px solid #d1d5db; padding:8px 10px; font-size:12px; letter-spacing:0.06em; color:#374151;">DETALLE RAPIDO (PRIMEROS 5 ITEMS)</th>
-                  </tr>
-                  <tr>
-                    <th style="text-align:left; border:1px solid #d1d5db; padding:8px 10px; font-size:11px; color:#6b7280;">MATERIAL</th>
-                    <th style="text-align:left; border:1px solid #d1d5db; padding:8px 10px; font-size:11px; color:#6b7280;">CATEGORIA</th>
-                    <th style="text-align:right; border:1px solid #d1d5db; padding:8px 10px; font-size:11px; color:#6b7280;">CANTIDAD</th>
-                    <th style="text-align:right; border:1px solid #d1d5db; padding:8px 10px; font-size:11px; color:#6b7280;">RESULTADO</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${detailRowsHtml || `<tr><td colspan="4" style="padding:10px; border:1px solid #d1d5db; font-size:12px; color:#6b7280;">Sin elementos para previsualizar.</td></tr>`}
-                </tbody>
-              </table>
-
-              <p style="margin:0 0 6px 0; font-size:12px; color:#4b5563;">${escapeHtml(preferences.emailNote)}</p>
-              <p style="margin:0; font-size:11px; color:#6b7280;">Generado por SurtiTrack - Logística Operativa</p>
-            </div>
-          </div>
-        </div>
-      `;
-
-      const composeResult = await MailComposer.composeAsync({
-        recipients: [recipientEmail.trim()],
-        subject,
-        body: logoDataUri ? htmlBody : body,
-        isHtml: Boolean(logoDataUri),
-        attachments: [fileUri],
-      });
-
-      if (composeResult.status === MailComposer.MailComposerStatus.SENT || composeResult.status === MailComposer.MailComposerStatus.SAVED) {
-        setNextLeadNumber((current) => current + 1);
-        setStatusMessage('Solicitud preparada correctamente con adjunto CSV.');
-        setStatusType('success');
-      } else {
-        setStatusMessage('Envio cancelado. El folio no se incremento.');
-        setStatusType('error');
-      }
+      setStatusMessage(result.statusMessage);
+      setStatusType(result.statusType);
     } catch {
       setStatusMessage('No se pudo preparar la solicitud.');
       setStatusType('error');
@@ -1424,24 +923,25 @@ export default function BolsasScreen({
 
   if (isLoading) {
     return (
-      <View className="flex-1 items-center justify-center bg-industrial-bg px-6">
-        <View className="items-center gap-4 rounded-ind border border-industrial-border bg-industrial-surface px-6 py-8">
+      <View className="flex-1 items-center justify-center bg-industrial-bg px-6" style={{ backgroundColor: themeColors.pageBg }}>
+        <View className="items-center gap-4 rounded-ind border border-industrial-border bg-industrial-surface px-6 py-8" style={{ backgroundColor: themeColors.cardBg, borderColor: themeColors.border }}>
           <ActivityIndicator size="large" color="#FFB020" />
-          <Text className="text-base font-semibold text-white">Cargando configuracion...</Text>
+          <Text className="text-base font-semibold text-white" style={{ color: themeColors.text }}>Cargando configuracion...</Text>
         </View>
       </View>
     );
   }
 
   return (
-    <KeyboardAvoidingView className="flex-1 bg-industrial-bg" behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}>
+    <KeyboardAvoidingView className="flex-1 bg-industrial-bg" style={{ backgroundColor: themeColors.pageBg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}>
       <ScrollView
         className="flex-1 bg-industrial-bg"
+        style={{ backgroundColor: themeColors.pageBg }}
         contentContainerClassName="px-4 pb-32 pt-4"
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
-      <View className="w-full self-center rounded-ind border border-industrial-border bg-industrial-surface px-4 py-4">
+      <View className="w-full self-center rounded-ind border border-industrial-border bg-industrial-surface px-4 py-4" style={{ backgroundColor: themeColors.cardBg, borderColor: themeColors.border }}>
         <View className="mb-4" style={{ minHeight: 56 }}>
           {statusMessage ? (
             <View className={`rounded-ind border px-4 py-3 ${statusType === 'error' ? 'border-[#c2410c] bg-[#3a2414]' : 'border-emerald-500/40 bg-emerald-500/10'}`}>
@@ -1450,13 +950,13 @@ export default function BolsasScreen({
           ) : null}
         </View>
 
-        <View className="mb-4 rounded-ind border border-industrial-border bg-industrial-bg px-4 py-4">
+        <View className="mb-4 rounded-ind border border-industrial-border bg-industrial-bg px-4 py-4" style={panelStyle}>
           <View className="flex-row items-center justify-between">
             <View className="flex-1 pr-3">
-              <Text className="text-[11px] uppercase tracking-[0.28em] text-slate-400">{preferences.appName}</Text>
-              <Text className="mt-1 text-2xl font-bold text-white">{preferences.headerSubtitle}</Text>
+              <Text className="text-[13px] uppercase tracking-[0.28em] text-slate-400" style={{ color: themeColors.muted }}>{preferences.appName}</Text>
+              <Text className="mt-1 text-2xl font-bold text-white" style={{ color: themeColors.text }}>{preferences.headerSubtitle}</Text>
             </View>
-            <View className="items-center justify-center rounded-ind border border-industrial-border px-3 py-3" style={{ borderColor: accent.border, backgroundColor: '#2A3138' }}>
+            <View className="items-center justify-center rounded-ind border border-industrial-border px-3 py-3" style={{ borderColor: accent.border, backgroundColor: isLightMode ? '#EEF3F8' : '#2A3138' }}>
               {preferences.logoSource ? (
                 <Image source={{ uri: preferences.logoSource }} style={{ width: 48, height: 48, borderRadius: 12 }} resizeMode="cover" />
               ) : (
@@ -1464,13 +964,13 @@ export default function BolsasScreen({
               )}
             </View>
           </View>
-          <Text className="mt-2 text-sm text-slate-400">
+          <Text className="mt-2 text-sm text-slate-400" style={{ color: themeColors.muted }}>
             {preferences.emailNote}
           </Text>
         </View>
 
         <View className="mb-3">
-          <Text className="mb-2 text-sm font-semibold uppercase tracking-[0.22em] text-slate-400">Tipo de material</Text>
+          <Text className="mb-2 text-sm font-semibold uppercase tracking-[0.22em] text-slate-400" style={{ color: themeColors.muted }}>Tipo de material</Text>
           <View className="flex-row gap-2">
             {CATEGORIES.map((category) => {
               const active = category.key === selectedCategory;
@@ -1480,11 +980,11 @@ export default function BolsasScreen({
                   key={category.key}
                   onPress={() => setSelectedCategory(category.key)}
                   className={`flex-1 rounded-ind border px-3 py-3 ${active ? '' : 'border-industrial-border bg-industrial-bg'}`}
-                  style={active ? { borderColor: accent.border, backgroundColor: accent.color } : undefined}
+                  style={active ? { borderColor: accent.border, backgroundColor: accent.color } : { borderColor: themeColors.border, backgroundColor: themeColors.inputBg }}
                 >
                   <View className="items-center gap-2">
-                    <MaterialCommunityIcons name={category.icon} size={18} color={active ? '#ffffff' : '#cbd5e1'} />
-                    <Text className={`text-center text-sm font-semibold ${active ? 'text-white' : 'text-slate-300'}`}>
+                    <MaterialCommunityIcons name={category.icon} size={18} color={active ? themeColors.buttonTextOnAccent : themeColors.muted} />
+                    <Text className={`text-center text-sm font-semibold ${active ? 'text-white' : 'text-slate-300'}`} style={{ color: active ? themeColors.buttonTextOnAccent : themeColors.buttonText }}>
                       {category.label}
                     </Text>
                   </View>
@@ -1494,13 +994,13 @@ export default function BolsasScreen({
           </View>
         </View>
 
-        <View className="mb-4 rounded-ind border border-industrial-border bg-industrial-bg px-3 py-3">
+        <View className="mb-4 rounded-ind border border-industrial-border bg-industrial-bg px-3 py-3" style={panelStyle}>
           <View className="mb-3 flex-row items-center justify-between">
-            <Text className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400">Alta de material</Text>
-            <Text className="text-xs text-slate-500">{categoryLabel(selectedCategory)}</Text>
+            <Text className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-400" style={{ color: themeColors.muted }}>Alta de material</Text>
+            <Text className="text-xs text-slate-500" style={{ color: themeColors.muted }}>{categoryLabel(selectedCategory)}</Text>
           </View>
 
-          <Text className="mb-1 text-xs text-slate-400">Nombre</Text>
+          <Text className="mb-1 text-xs text-slate-400" style={{ color: themeColors.muted }}>Nombre</Text>
           <TextInput
             value={drafts[selectedCategory].title}
             onChangeText={(value) =>
@@ -1516,8 +1016,9 @@ export default function BolsasScreen({
                   ? 'Ej. Caja corrugada 40x30'
                   : 'Ej. Bolsa reciclada 60x90'
             }
-            placeholderTextColor="#64748b"
+            placeholderTextColor={themeColors.muted}
             className="mb-3 rounded-ind border border-industrial-border bg-industrial-bg px-3 py-3 text-white"
+            style={inputFieldStyle}
           />
 
           {selectedCategory === 'bolsas' ? (
@@ -1532,9 +1033,9 @@ export default function BolsasScreen({
                     }))
                   }
                   className={`flex-1 rounded-ind px-3 py-3 ${drafts.bolsas.weightUnit === 'g' ? '' : 'bg-industrial-bg border border-industrial-border'}`}
-                  style={drafts.bolsas.weightUnit === 'g' ? { backgroundColor: accent.color, borderColor: accent.border } : undefined}
+                  style={drafts.bolsas.weightUnit === 'g' ? { backgroundColor: accent.color, borderColor: accent.border } : outlineButtonStyle}
                 >
-                  <Text className={`text-center text-sm font-semibold ${drafts.bolsas.weightUnit === 'g' ? 'text-white' : 'text-slate-300'}`}>
+                  <Text className={`text-center text-sm font-semibold ${drafts.bolsas.weightUnit === 'g' ? 'text-white' : 'text-slate-300'}`} style={{ color: drafts.bolsas.weightUnit === 'g' ? themeColors.buttonTextOnAccent : themeColors.buttonText }}>
                     Gramos
                   </Text>
                 </Pressable>
@@ -1546,9 +1047,9 @@ export default function BolsasScreen({
                     }))
                   }
                   className={`flex-1 rounded-ind px-3 py-3 ${drafts.bolsas.weightUnit === 'kg' ? '' : 'bg-industrial-bg border border-industrial-border'}`}
-                  style={drafts.bolsas.weightUnit === 'kg' ? { backgroundColor: accent.color, borderColor: accent.border } : undefined}
+                  style={drafts.bolsas.weightUnit === 'kg' ? { backgroundColor: accent.color, borderColor: accent.border } : outlineButtonStyle}
                 >
-                  <Text className={`text-center text-sm font-semibold ${drafts.bolsas.weightUnit === 'kg' ? 'text-white' : 'text-slate-300'}`}>
+                  <Text className={`text-center text-sm font-semibold ${drafts.bolsas.weightUnit === 'kg' ? 'text-white' : 'text-slate-300'}`} style={{ color: drafts.bolsas.weightUnit === 'kg' ? themeColors.buttonTextOnAccent : themeColors.buttonText }}>
                     Kilogramos
                   </Text>
                 </Pressable>
@@ -1594,9 +1095,9 @@ export default function BolsasScreen({
                         }))
                       }
                       className={`flex-1 rounded-ind px-3 py-3 ${active ? '' : 'bg-industrial-bg border border-industrial-border'}`}
-                      style={active ? { backgroundColor: accent.color, borderColor: accent.border } : undefined}
+                      style={active ? { backgroundColor: accent.color, borderColor: accent.border } : outlineButtonStyle}
                     >
-                      <Text className={`text-center text-sm font-semibold ${active ? 'text-white' : 'text-slate-300'}`}>
+                      <Text className={`text-center text-sm font-semibold ${active ? 'text-white' : 'text-slate-300'}`} style={{ color: active ? themeColors.buttonTextOnAccent : themeColors.buttonText }}>
                         {unitLabel(unit)}
                       </Text>
                     </Pressable>
@@ -1634,6 +1135,11 @@ export default function BolsasScreen({
             selected={item.id === selectedMaterialId}
             accent={accent}
             onPress={() => setSelectedMaterialId(item.id)}
+            categoryIcon={categoryIcon}
+            categoryLabel={categoryLabel}
+            modeLabel={modeLabel}
+            unitLabel={unitLabel}
+            getResultLabel={getResultLabel}
           />
         ))}
 
@@ -1668,7 +1174,7 @@ export default function BolsasScreen({
         </View>
 
         <View className="mt-4 rounded-ind border px-5 py-6" style={{ borderColor: accent.border, backgroundColor: '#2A3138' }}>
-          <Text className="text-center text-[11px] font-semibold uppercase tracking-[0.28em] text-slate-400">
+          <Text className="text-center text-[13px] font-semibold uppercase tracking-[0.28em] text-slate-400">
             {selectedMaterial ? getResultLabel(selectedMaterial) : 'Resultado'}
           </Text>
           <Text className="mt-2 text-center text-4xl font-bold text-white">
@@ -1688,8 +1194,8 @@ export default function BolsasScreen({
           style={accentSolidStyle}
         >
           <View className="flex-row items-center justify-center gap-2">
-            <MaterialCommunityIcons name="plus-box" size={20} color="#ffffff" />
-            <Text className="text-center text-sm font-bold uppercase tracking-[0.18em] text-white">Agregar a la solicitud</Text>
+            <MaterialCommunityIcons name="plus-box" size={20} color={themeColors.buttonTextOnAccent} />
+            <Text className="text-center text-sm font-bold uppercase tracking-[0.18em] text-white" style={{ color: themeColors.buttonTextOnAccent }}>Agregar a la solicitud</Text>
           </View>
         </Pressable>
 
@@ -1703,10 +1209,10 @@ export default function BolsasScreen({
           </View>
 
           <View className="rounded-ind border border-industrial-border bg-industrial-bg p-2">
-            <View className="mb-2 rounded-ind border px-3 py-2" style={{ borderColor: accent.border, backgroundColor: '#232A31' }}>
+            <View className="mb-2 rounded-ind border px-3 py-2" style={{ borderColor: accent.border, backgroundColor: isLightMode ? '#FFFFFF' : '#232A31' }}>
               <View className="mb-2 flex-row items-center gap-2">
                 <MaterialCommunityIcons name="email-fast-outline" size={16} color={accent.color} />
-                <Text className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">Destino de envío</Text>
+                <Text className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300" style={{ color: themeColors.muted }}>Destino de envío</Text>
               </View>
               <TextInput
                 value={recipientEmail}
@@ -1717,7 +1223,7 @@ export default function BolsasScreen({
                 placeholderTextColor="#64748b"
                 className={`rounded-ind border px-3 py-3 text-white ${recipientEmail.trim().length > 0 && !isValidEmail(recipientEmail) ? 'border-[#FFB020] bg-[#2a151a]' : 'border-industrial-border bg-industrial-surface'}`}
               />
-              <Text className={`mt-2 text-xs ${recipientEmail.trim().length === 0 || isValidEmail(recipientEmail) ? 'text-slate-400' : 'text-rose-300'}`}>
+              <Text className={`mt-2 text-xs ${recipientEmail.trim().length === 0 || isValidEmail(recipientEmail) ? 'text-slate-400' : 'text-rose-300'}`} style={{ color: recipientEmail.trim().length === 0 || isValidEmail(recipientEmail) ? themeColors.muted : '#B91C1C' }}>
                 {recipientEmail.trim().length === 0
                   ? 'Este correo se usará para enviar el resumen y se guarda localmente.'
                   : isValidEmail(recipientEmail)
@@ -1727,33 +1233,33 @@ export default function BolsasScreen({
             </View>
 
             {cartItems.length === 0 ? (
-              <View className="rounded-ind border border-dashed border-industrial-border px-3 py-4">
-                <Text className="text-sm text-slate-400">Aún no hay materiales en el resumen.</Text>
+              <View className="rounded-ind border border-dashed border-industrial-border px-3 py-4" style={{ borderColor: themeColors.border, backgroundColor: themeColors.inputBg }}>
+                <Text className="text-sm text-slate-400" style={{ color: themeColors.muted }}>Aún no hay materiales en el resumen.</Text>
               </View>
             ) : (
               cartItems.map((item) => (
-                <View key={item.id} className="mb-1 rounded-ind border border-industrial-border bg-industrial-surface px-2 py-2">
+                <View key={item.id} className="mb-1 rounded-ind border border-industrial-border bg-industrial-surface px-2 py-2" style={{ borderColor: themeColors.border, backgroundColor: themeColors.inputBg }}>
                   <View className="flex-row items-center gap-2">
                     <View className="flex-1">
-                      <Text className="text-sm font-semibold text-white">{item.materialTitle}</Text>
-                      <Text className="text-[11px] text-industrial-muted">
+                      <Text className="text-sm font-semibold text-white" style={{ color: themeColors.text }}>{item.materialTitle}</Text>
+                      <Text className="text-[13px] text-industrial-muted" style={{ color: themeColors.muted }}>
                         {categoryLabel(item.category)} · {modeLabel(item.calcMode)}
                       </Text>
                     </View>
                     <View className="items-end">
-                      <Text className="text-[10px] uppercase tracking-[0.12em] text-industrial-muted">Capt.</Text>
-                      <Text className="text-sm font-semibold text-white">{formatNumber(item.requestValue)}</Text>
+                      <Text className="text-[13px] uppercase tracking-[0.12em] text-industrial-muted" style={{ color: themeColors.muted }}>Capt.</Text>
+                      <Text className="text-sm font-semibold text-white" style={{ color: themeColors.text }}>{formatNumber(item.requestValue)}</Text>
                     </View>
                     <View className="items-end">
-                      <Text className="text-[10px] uppercase tracking-[0.12em] text-industrial-muted">Res.</Text>
-                      <Text className="text-sm font-semibold text-white">{formatNumber(item.calculatedValue)}</Text>
+                      <Text className="text-[13px] uppercase tracking-[0.12em] text-industrial-muted" style={{ color: themeColors.muted }}>Res.</Text>
+                      <Text className="text-sm font-semibold text-white" style={{ color: themeColors.text }}>{formatNumber(item.calculatedValue)}</Text>
                     </View>
                     <Pressable
                       onPress={() => removeCartItem(item.id)}
-                      className="rounded-ind border px-2 py-1"
+                      className="min-h-12 min-w-12 items-center justify-center rounded-ind border px-3 py-2"
                       style={({ pressed }) => [accentBorderStyle, pressed ? { opacity: 0.82 } : undefined]}
                     >
-                      <Text className="text-[10px] font-semibold" style={{ color: accent.soft }}>Quitar</Text>
+                      <Text className="text-[13px] font-semibold" style={{ color: isLightMode ? themeColors.buttonText : accent.soft }}>Quitar</Text>
                     </Pressable>
                   </View>
                 </View>
@@ -1764,9 +1270,9 @@ export default function BolsasScreen({
               <Pressable
                 onPress={clearCart}
                 className="flex-1 rounded-ind border px-3 py-3"
-                style={accentSolidStyle}
+                style={isLightMode ? { backgroundColor: '#E2E8F0', borderColor: '#B8C7D6' } : accentSolidStyle}
               >
-                <Text className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-white">Vaciar solicitud</Text>
+                <Text className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-white" style={{ color: isLightMode ? themeColors.buttonText : '#FFFFFF' }}>Vaciar solicitud</Text>
               </Pressable>
               <Pressable
                 disabled={!canSendEmail}
@@ -1776,7 +1282,7 @@ export default function BolsasScreen({
                 className={`flex-1 min-h-[46px] items-center justify-center rounded-ind border px-3 py-3 ${canSendEmail ? '' : 'border-[#55606B] bg-[#55606B]'}`}
                 style={canSendEmail ? accentSolidStyle : accentGhostStyle}
               >
-                <Text className={`text-center text-xs font-semibold uppercase tracking-[0.16em] ${canSendEmail ? 'text-white' : ''}`} style={!canSendEmail ? { color: accent.soft } : undefined}>
+                <Text className={`text-center text-xs font-semibold uppercase tracking-[0.16em] ${canSendEmail ? 'text-white' : ''}`} style={!canSendEmail ? { color: isLightMode ? themeColors.buttonText : accent.soft } : undefined}>
                   {isSendingEmail ? 'Enviando...' : 'Enviar solicitud'}
                 </Text>
               </Pressable>
@@ -1784,24 +1290,24 @@ export default function BolsasScreen({
           </View>
         </View>
 
-        <View className="mt-4 rounded-ind border border-industrial-border bg-industrial-bg px-4 py-4">
+        <View className="mt-4 rounded-ind border border-industrial-border bg-industrial-bg px-4 py-4" style={{ backgroundColor: themeColors.panelBg, borderColor: themeColors.border }}>
           <Pressable onPress={() => setSettingsOpen((current) => !current)} className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-2">
               <MaterialCommunityIcons name="tune-variant" size={18} color={accent.color} />
-              <Text className="text-base font-semibold text-white">Personalización de app</Text>
+              <Text className="text-base font-semibold text-white" style={{ color: themeColors.text }}>Personalización de app</Text>
             </View>
-            <MaterialCommunityIcons name={settingsOpen ? 'chevron-up' : 'chevron-down'} size={20} color="#cbd5e1" />
+            <MaterialCommunityIcons name={settingsOpen ? 'chevron-up' : 'chevron-down'} size={20} color={themeColors.muted} />
           </Pressable>
 
           {settingsOpen ? (
             <View className="mt-4">
-              <View className="mb-4 rounded-ind border border-industrial-border bg-industrial-bg px-4 py-4">
+              <View className="mb-4 rounded-ind border border-industrial-border bg-industrial-bg px-4 py-4" style={{ backgroundColor: themeColors.panelBg, borderColor: themeColors.border }}>
                 <View className="mb-3 flex-row items-center gap-2">
                   <MaterialCommunityIcons name="palette-outline" size={16} color={accent.color} />
-                    <Text className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">Marca, logo y exportación</Text>
+                    <Text className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300" style={{ color: themeColors.muted }}>Marca, logo y exportación</Text>
                 </View>
 
-                <Text className="mb-1 text-xs text-slate-400">Nombre visible de la app</Text>
+                <Text className="mb-1 text-xs text-slate-400" style={{ color: themeColors.muted }}>Nombre visible de la app</Text>
                 <TextInput
                     value={draftPreferences.appName}
                   onChangeText={(value) =>
@@ -1811,11 +1317,12 @@ export default function BolsasScreen({
                     }))
                   }
                   placeholder="SurtiTrack"
-                  placeholderTextColor="#64748b"
+                  placeholderTextColor={themeColors.muted}
                   className="mb-3 rounded-ind border border-industrial-border bg-industrial-surface px-3 py-3 text-white"
+                  style={inputFieldStyle}
                 />
 
-                <Text className="mb-1 text-xs text-slate-400">Subtítulo del encabezado</Text>
+                <Text className="mb-1 text-xs text-slate-400" style={{ color: themeColors.muted }}>Subtítulo del encabezado</Text>
                 <TextInput
                     value={draftPreferences.headerSubtitle}
                   onChangeText={(value) =>
@@ -1825,11 +1332,44 @@ export default function BolsasScreen({
                     }))
                   }
                   placeholder="Solicitud logística corporativa"
-                  placeholderTextColor="#64748b"
+                  placeholderTextColor={themeColors.muted}
                   className="mb-3 rounded-ind border border-industrial-border bg-industrial-surface px-3 py-3 text-white"
+                  style={inputFieldStyle}
                 />
 
-                <Text className="mb-1 text-xs text-slate-400">Prefijo del folio</Text>
+                <Text className="mb-1 text-xs text-slate-400" style={{ color: themeColors.muted }}>Modo visual</Text>
+                <View className="mb-3 flex-row gap-2">
+                  <Pressable
+                    onPress={() =>
+                      setDraftPreferences((current) => ({
+                        ...current,
+                        themeMode: 'dark',
+                      }))
+                    }
+                    className="flex-1 rounded-ind border px-3 py-3"
+                    style={draftPreferences.themeMode === 'dark' ? accentSolidStyle : outlineButtonStyle}
+                  >
+                    <Text className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-white" style={{ color: draftPreferences.themeMode === 'dark' ? themeColors.buttonTextOnAccent : themeColors.buttonText }}>
+                      Modo oscuro
+                    </Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() =>
+                      setDraftPreferences((current) => ({
+                        ...current,
+                        themeMode: 'light',
+                      }))
+                    }
+                    className="flex-1 rounded-ind border px-3 py-3"
+                    style={draftPreferences.themeMode === 'light' ? accentSolidStyle : outlineButtonStyle}
+                  >
+                    <Text className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-white" style={{ color: draftPreferences.themeMode === 'light' ? themeColors.buttonTextOnAccent : themeColors.buttonText }}>
+                      Modo claro
+                    </Text>
+                  </Pressable>
+                </View>
+
+                <Text className="mb-1 text-xs text-slate-400" style={{ color: themeColors.muted }}>Prefijo del folio</Text>
                 <TextInput
                   value={draftPreferences.folioPrefix}
                   onChangeText={(value) =>
@@ -1839,18 +1379,19 @@ export default function BolsasScreen({
                     }))
                   }
                   placeholder="CS"
-                  placeholderTextColor="#64748b"
+                  placeholderTextColor={themeColors.muted}
                   className="mb-3 rounded-ind border border-industrial-border bg-industrial-surface px-3 py-3 text-white"
+                  style={inputFieldStyle}
                 />
-                <View className="mb-3 rounded-ind border border-industrial-border bg-industrial-bg px-3 py-3">
-                  <Text className="text-[11px] uppercase tracking-[0.18em] text-slate-500">Vista de folio</Text>
-                  <Text className="mt-1 text-base font-semibold text-white">
+                <View className="mb-3 rounded-ind border border-industrial-border bg-industrial-bg px-3 py-3" style={panelStyle}>
+                  <Text className="text-[13px] uppercase tracking-[0.18em] text-slate-500" style={{ color: themeColors.muted }}>Vista de folio</Text>
+                  <Text className="mt-1 text-base font-semibold text-white" style={{ color: themeColors.text }}>
                     {buildRequestCode(draftPreferences.folioPrefix, nextLeadNumber)}
                   </Text>
-                  <Text className="mt-1 text-xs text-slate-400">Prefijo permitido: A-Z, 0-9 y guion (máx. 8).</Text>
+                  <Text className="mt-1 text-xs text-slate-400" style={{ color: themeColors.muted }}>Prefijo permitido: A-Z, 0-9 y guion (máx. 8).</Text>
                 </View>
 
-                  <Text className="mb-1 text-xs text-slate-400">Texto al pie del correo</Text>
+                  <Text className="mb-1 text-xs text-slate-400" style={{ color: themeColors.muted }}>Texto al pie del correo</Text>
                 <TextInput
                     value={draftPreferences.emailNote}
                   onChangeText={(value) =>
@@ -1860,28 +1401,72 @@ export default function BolsasScreen({
                     }))
                   }
                   placeholder="Operación interna segura y trazable."
-                  placeholderTextColor="#64748b"
+                  placeholderTextColor={themeColors.muted}
                   className="mb-4 rounded-ind border border-industrial-border bg-industrial-surface px-3 py-3 text-white"
+                  style={inputFieldStyle}
                 />
 
-                <Text className="mb-1 text-xs text-slate-400">Machote del correo</Text>
-                <TextInput
-                  value={draftPreferences.emailTemplate}
-                  onChangeText={(value) =>
-                    setDraftPreferences((current) => ({
-                      ...current,
-                      emailTemplate: value,
-                    }))
-                  }
-                  multiline
-                  numberOfLines={10}
-                  textAlignVertical="top"
-                  placeholder={DEFAULT_PREFERENCES.emailTemplate}
-                  placeholderTextColor="#64748b"
-                  className="mb-3 min-h-[220px] rounded-ind border border-industrial-border bg-industrial-surface px-3 py-3 text-white"
-                />
+                <Text className="mb-1 text-xs text-slate-400" style={{ color: themeColors.muted }}>Machote del correo</Text>
+                
+                {/* Área editable del machote con chips */}
+                <View className="mb-4 rounded-ind border border-industrial-border bg-industrial-bg px-3 py-3 min-h-[180px]" style={{ backgroundColor: themeColors.inputBg, borderColor: themeColors.border }}>
+                  <View className="flex-row flex-wrap items-center gap-2">
+                    {draftTemplateElements.length === 0 ? (
+                      <Text className="text-slate-500 text-xs" style={{ color: themeColors.muted }}>Vacío - agrega campos abajo</Text>
+                    ) : (
+                      draftTemplateElements.map((element, index) => (
+                        <View key={index} className="flex-row items-center gap-1">
+                          {element.type === 'text' ? (
+                            <View className="flex-row items-center rounded-ind border border-industrial-border px-2 py-1" style={{ borderColor: themeColors.chipTextBorder, backgroundColor: themeColors.chipTextBg }}>
+                              <TextInput
+                                value={element.content}
+                                onChangeText={(value) => updateTextElement(index, value)}
+                                placeholder="Texto"
+                                placeholderTextColor={themeColors.muted}
+                                className="min-w-[120px] text-sm"
+                                style={{ color: themeColors.text }}
+                              />
+                              <Pressable onPress={() => removeElementFromTemplate(index)} className="ml-1">
+                                <MaterialCommunityIcons name="close" size={14} color={themeColors.muted} />
+                              </Pressable>
+                            </View>
+                          ) : (
+                            <View className="flex-row items-center gap-1 px-2 py-1 rounded-ind border" style={{ backgroundColor: themeColors.chipFieldBg, borderColor: themeColors.chipFieldBorder }}>
+                              <Text className="text-white text-xs font-semibold">{element.name}</Text>
+                              <Pressable onPress={() => removeElementFromTemplate(index)}>
+                                <MaterialCommunityIcons name="close" size={14} color="#ffffff" />
+                              </Pressable>
+                            </View>
+                          )}
+                        </View>
+                      ))
+                    )}
+                  </View>
+                </View>
 
-                  <Text className="mb-1 text-xs text-slate-400">Texto para Excel / CSV</Text>
+                {/* Botones para agregar campos */}
+                <Text className="mb-2 text-xs text-slate-400" style={{ color: themeColors.muted }}>Campos disponibles (click para agregar):</Text>
+                <View className="mb-3 flex-row flex-wrap gap-2">
+                  <Pressable
+                    onPress={addTextBlockToTemplate}
+                    className="rounded-ind px-3 py-2 border border-industrial-border"
+                    style={{ borderColor: themeColors.border, backgroundColor: themeColors.chipTextBg }}
+                  >
+                    <Text className="text-xs font-semibold uppercase" style={{ color: themeColors.text }}>+ texto</Text>
+                  </Pressable>
+                  {(['logo', 'greeting', 'folio', 'totalMaterials', 'totalPieces', 'totalKg', 'attachmentNote', 'emailNote'] as const).map((fieldName) => (
+                    <Pressable 
+                      key={fieldName} 
+                      onPress={() => addFieldToTemplate(fieldName)}
+                      className="rounded-ind px-3 py-2 border"
+                      style={{ backgroundColor: themeColors.chipFieldBg, borderColor: themeColors.chipFieldBorder }}
+                    >
+                      <Text className="text-xs font-semibold text-white uppercase">{fieldName}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                  <Text className="mb-1 text-xs text-slate-400" style={{ color: themeColors.muted }}>Texto para Excel / CSV</Text>
                   <TextInput
                     value={draftPreferences.sheetNote}
                     onChangeText={(value) =>
@@ -1894,18 +1479,19 @@ export default function BolsasScreen({
                       numberOfLines={4}
                       textAlignVertical="top"
                       placeholder="Registro interno para control y seguimiento."
-                    placeholderTextColor="#64748b"
+                    placeholderTextColor={themeColors.muted}
                       className="mb-3 min-h-[96px] rounded-ind border border-industrial-border bg-industrial-surface px-3 py-3 text-white"
+                      style={inputFieldStyle}
                   />
 
-                  <Text className="mb-1 text-xs text-slate-400">Logo de la empresa</Text>
-                  <Text className="mb-3 text-xs text-slate-500">
+                  <Text className="mb-1 text-xs text-slate-400" style={{ color: themeColors.muted }}>Logo de la empresa</Text>
+                  <Text className="mb-3 text-xs text-slate-500" style={{ color: themeColors.muted }}>
                     Carga el logo desde la galería del dispositivo. La app lo guarda en local al presionar guardar.
                   </Text>
 
                   <View className="mb-3 flex-row gap-2">
-                    <Pressable onPress={() => void pickLogoFromDevice()} className="flex-1 rounded-ind border border-industrial-border px-3 py-3">
-                      <Text className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-slate-200">
+                    <Pressable onPress={() => void pickLogoFromDevice()} className="flex-1 rounded-ind border border-industrial-border px-3 py-3" style={{ borderColor: themeColors.border, backgroundColor: themeColors.inputBg }}>
+                      <Text className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-slate-200" style={{ color: themeColors.text }}>
                         Cargar desde galería
                       </Text>
                     </Pressable>
@@ -1918,17 +1504,18 @@ export default function BolsasScreen({
                         }))
                       }
                       className="flex-1 rounded-ind border border-industrial-border px-3 py-3"
+                      style={{ borderColor: themeColors.border, backgroundColor: themeColors.inputBg }}
                     >
-                      <Text className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-slate-200">
+                      <Text className="text-center text-xs font-semibold uppercase tracking-[0.16em] text-slate-200" style={{ color: themeColors.text }}>
                         Quitar logo
                       </Text>
                     </Pressable>
                   </View>
 
-                  <View className="mb-4 rounded-ind border border-industrial-border bg-industrial-surface px-4 py-4">
-                    <Text className="mb-2 text-[11px] uppercase tracking-[0.22em] text-slate-400">Vista previa</Text>
+                  <View className="mb-4 rounded-ind border border-industrial-border bg-industrial-surface px-4 py-4" style={{ backgroundColor: themeColors.inputBg, borderColor: themeColors.border }}>
+                    <Text className="mb-2 text-[13px] uppercase tracking-[0.22em] text-slate-400" style={{ color: themeColors.muted }}>Vista previa</Text>
                     <View className="flex-row items-center gap-3">
-                      <View className="h-14 w-14 items-center justify-center rounded-ind bg-industrial-bg overflow-hidden">
+                      <View className="h-14 w-14 items-center justify-center rounded-ind bg-industrial-bg overflow-hidden" style={{ backgroundColor: themeColors.chipTextBg }}>
                         {draftPreferences.logoSource ? (
                           <Image source={{ uri: draftPreferences.logoSource }} style={{ width: 56, height: 56, borderRadius: 12 }} resizeMode="cover" />
                         ) : (
@@ -1936,15 +1523,15 @@ export default function BolsasScreen({
                         )}
                       </View>
                       <View className="flex-1">
-                        <Text className="text-sm font-semibold text-white">{draftPreferences.logoLabel || 'Sin logo cargado'}</Text>
-                        <Text className="mt-1 text-xs text-slate-400">
+                        <Text className="text-sm font-semibold text-white" style={{ color: themeColors.text }}>{draftPreferences.logoLabel || 'Sin logo cargado'}</Text>
+                        <Text className="mt-1 text-xs text-slate-400" style={{ color: themeColors.muted }}>
                           {draftPreferences.logoSource ? 'Se usará en app, correo y exportación cuando guardes.' : 'Todavía no hay un logo personalizado.'}
                         </Text>
                       </View>
                     </View>
                   </View>
 
-                <Text className="mb-2 text-xs text-slate-400">Color de acento</Text>
+                <Text className="mb-2 text-xs text-slate-400" style={{ color: themeColors.muted }}>Color de acento</Text>
                 <View className="flex-row flex-wrap gap-2">
                   {(Object.keys(ACCENT_PRESETS) as AccentKey[]).map((key) => {
                     const active = draftPreferences.accentKey === key;
@@ -1959,31 +1546,53 @@ export default function BolsasScreen({
                             accentKey: key,
                           }))
                         }
-                        className={`rounded-ind border px-3 py-2 ${active ? 'bg-industrial-surface' : 'bg-transparent'}`}
-                        style={{ borderColor: preset.border }}
+                        className="rounded-ind border px-3 py-2"
+                        style={{
+                          borderColor: active ? preset.border : themeColors.buttonOutlineBorder,
+                          backgroundColor: active ? preset.color : themeColors.buttonOutlineBg,
+                        }}
                       >
-                        <Text className="text-xs font-semibold text-white">{preset.label}</Text>
+                        <Text className="text-xs font-semibold text-white" style={{ color: active ? themeColors.buttonTextOnAccent : themeColors.buttonText }}>{preset.label}</Text>
                       </Pressable>
                     );
                   })}
                 </View>
 
                   <View className="mt-4 flex-row items-center justify-between gap-3">
-                    <Text className={`text-xs font-medium ${hasPendingPreferenceChanges ? 'text-amber-300' : 'text-emerald-300'}`}>
+                    <Text className={`text-xs font-medium ${hasPendingPreferenceChanges ? 'text-amber-300' : 'text-emerald-300'}`} style={!hasPendingPreferenceChanges ? { color: themeColors.statusOkText } : undefined}>
                       {hasPendingPreferenceChanges ? 'Hay cambios sin guardar.' : 'Configuración guardada.'}
                     </Text>
                     <Pressable
                       onPress={savePreferences}
-                      className="rounded-ind px-4 py-3"
-                      style={({ pressed }) => [accentStyle, pressed ? { opacity: 0.84 } : undefined]}
+                      className="rounded-ind border px-4 py-3"
+                      style={({ pressed }) => [
+                        {
+                          backgroundColor: accent.color,
+                          borderColor: accent.border,
+                          shadowColor: '#000000',
+                          shadowOpacity: 0.12,
+                          shadowRadius: 6,
+                          shadowOffset: { width: 0, height: 3 },
+                          elevation: 2,
+                        },
+                        pressed ? { opacity: 0.84 } : undefined,
+                      ]}
                     >
-                      <Text className="text-xs font-semibold uppercase tracking-[0.18em] text-white">Guardar cambios</Text>
+                      <Text className="text-xs font-semibold uppercase tracking-[0.18em] text-white" style={{ color: themeColors.buttonTextOnAccent }}>Guardar cambios</Text>
                     </Pressable>
                   </View>
               </View>
 
               {currentMaterials.map((item) => (
-                <ConfigRow key={item.id} item={item} accent={accent} onChange={updateMaterialById} onDelete={removeMaterial} />
+                <ConfigRow
+                  key={item.id}
+                  item={item}
+                  accent={accent}
+                  onChange={updateMaterialById}
+                  onDelete={removeMaterial}
+                  categoryIcon={categoryIcon}
+                  unitLabel={unitLabel}
+                />
               ))}
             </View>
           ) : null}

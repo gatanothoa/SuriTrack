@@ -70,6 +70,22 @@ export function convertFromKg(valueKg: number, unit: 'kg' | 'g') {
   return unit === 'g' ? valueKg * 1000 : valueKg;
 }
 
+export function convertWeightUnitToKg(value: number, unit: CalculationUnit) {
+  if (!isNonEmptyPositive(value)) {
+    return 0;
+  }
+
+  if (unit === 'kg') {
+    return value;
+  }
+
+  if (unit === 'g') {
+    return value / 1000;
+  }
+
+  return 0;
+}
+
 export function calculateRequestedValue(material: CalculationMaterial) {
   if (material.calcMode === 'bags') {
     return (material.requestValue / 100) * material.weightPer100Kg;

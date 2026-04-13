@@ -2,7 +2,7 @@
   "expo": {
     "name": "SurtiTrack",
     "slug": "CalcPack",
-    "version": "1.0.6",
+    "version": "1.0.7",
     "scheme": "surtitrack",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -25,7 +25,7 @@
     },
     "android": {
       "package": "com.surtitrack.app",
-      "versionCode": 8,
+      "versionCode": 9,
       "allowBackup": false,
       "permissions": [],
       "blockedPermissions": [

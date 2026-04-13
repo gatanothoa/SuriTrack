@@ -14,12 +14,14 @@ type HeaderPreferences = {
   appName: string;
   headerSubtitle: string;
   logoSource: string;
+  themeMode: 'dark' | 'light';
 };
 
 const DEFAULT_HEADER_PREFERENCES: HeaderPreferences = {
   appName: 'SurtiTrack',
   headerSubtitle: 'Solicitud logística corporativa',
   logoSource: '',
+  themeMode: 'dark',
 };
 
 function StartupLogo() {
@@ -45,13 +47,20 @@ function StartupLogo() {
 export default function App() {
   const [ready, setReady] = useState(false);
   const [headerPreferences, setHeaderPreferences] = useState<HeaderPreferences>(DEFAULT_HEADER_PREFERENCES);
+  const isLightMode = headerPreferences.themeMode === 'light';
+  const appBackground = isLightMode ? '#DCE5EF' : '#1E2329';
+  const appSurface = isLightMode ? '#EDF2F7' : '#232A31';
+  const appBorder = isLightMode ? '#A9B8C8' : '#3A434D';
+  const appText = isLightMode ? '#1F2937' : '#FFFFFF';
+  const appSubText = isLightMode ? '#4B5563' : '#94A3B8';
 
   const handleHeaderPreferencesChange = useCallback((nextPreferences: HeaderPreferences) => {
     setHeaderPreferences((current) => {
       if (
         current.appName === nextPreferences.appName &&
         current.headerSubtitle === nextPreferences.headerSubtitle &&
-        current.logoSource === nextPreferences.logoSource
+        current.logoSource === nextPreferences.logoSource &&
+        current.themeMode === nextPreferences.themeMode
       ) {
         return current;
       }
@@ -61,6 +70,7 @@ export default function App() {
         appName: nextPreferences.appName,
         headerSubtitle: nextPreferences.headerSubtitle,
         logoSource: nextPreferences.logoSource,
+        themeMode: nextPreferences.themeMode,
       };
     });
   }, []);
@@ -92,6 +102,7 @@ export default function App() {
               : DEFAULT_HEADER_PREFERENCES.headerSubtitle,
           logoSource:
             typeof preferences.logoSource === 'string' && preferences.logoSource.trim() ? preferences.logoSource.trim() : DEFAULT_HEADER_PREFERENCES.logoSource,
+          themeMode: preferences.themeMode === 'light' ? 'light' : 'dark',
         });
       } catch {
         setHeaderPreferences(DEFAULT_HEADER_PREFERENCES);
@@ -118,13 +129,13 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <SafeAreaView className="flex-1 bg-industrial-bg" style={{ backgroundColor: '#1E2329' }}>
-        <StatusBar style="light" backgroundColor="#1E2329" translucent={false} />
+        <SafeAreaView className="flex-1 bg-industrial-bg" style={{ backgroundColor: appBackground }}>
+          <StatusBar style={isLightMode ? 'dark' : 'light'} backgroundColor={appBackground} translucent={false} />
 
-        <View className="flex-1 bg-industrial-bg">
-          <View className="border-b border-industrial-border bg-industrial-surface px-4 py-4">
+          <View className="flex-1 bg-industrial-bg" style={{ backgroundColor: appBackground }}>
+          <View className="border-b border-industrial-border bg-industrial-surface px-4 py-4" style={{ backgroundColor: appSurface, borderBottomColor: appBorder }}>
             <View className="flex-row items-center gap-3">
-              <View className="items-center justify-center rounded-ind border border-industrial-border bg-industrial-bg px-3 py-3">
+              <View className="items-center justify-center rounded-ind border border-industrial-border bg-industrial-bg px-3 py-3" style={{ borderColor: appBorder, backgroundColor: appBackground }}>
                 {headerPreferences.logoSource ? (
                   <Image source={{ uri: headerPreferences.logoSource }} style={{ width: 24, height: 24, borderRadius: 6 }} resizeMode="cover" />
                 ) : (
@@ -132,8 +143,8 @@ export default function App() {
                 )}
               </View>
               <View>
-                <Text className="text-lg font-bold text-white">{headerPreferences.appName}</Text>
-                <Text className="text-sm text-slate-400">{headerPreferences.appName} · {headerPreferences.headerSubtitle}</Text>
+                <Text className="text-lg font-bold text-white" style={{ color: appText }}>{headerPreferences.appName}</Text>
+                <Text className="text-sm text-slate-400" style={{ color: appSubText }}>{headerPreferences.appName} · {headerPreferences.headerSubtitle}</Text>
               </View>
             </View>
           </View>
