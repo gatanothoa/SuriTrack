@@ -1,6 +1,7 @@
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { convertFromKg, convertToKg, isNonEmptyPositive, parseOptionalPositiveNumber } from '../utils/calculations';
 import type { AccentPreset, MaterialOption, MaterialUnit } from '../types/logistics';
+import AppIcon from './AppIcon';
 
 type ConfigRowProps = {
   item: MaterialOption;
@@ -13,14 +14,14 @@ type ConfigRowProps = {
 export default function ConfigRow({ item, accent, onChange, onDelete, unitLabel }: ConfigRowProps) {
   const invalidWeight = item.calcMode === 'bags' && item.weightPer100Kg <= 0;
   const displayWeight = convertFromKg(item.weightPer100Kg, item.weightUnit);
-  const categoryBadge = item.category === 'bolsas' ? '🛍️' : item.category === 'cajas' ? '📦' : '🧩';
+  const categoryBadge = item.category === 'bolsas' ? 'bolsas' : item.category === 'cajas' ? 'cajas' : 'otros';
 
   return (
     <View className="mb-3 rounded-ind border border-industrial-border bg-industrial-surface px-3 py-3">
       <View className="mb-3 flex-row items-center justify-between">
         <View className="flex-row items-center gap-2">
           <View className="h-5 w-5 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
-            <Text className="text-[11px]">{categoryBadge}</Text>
+            <AppIcon name={categoryBadge} size={10} />
           </View>
           <Text className="text-sm font-semibold text-slate-100">{item.title || 'Material'}</Text>
         </View>

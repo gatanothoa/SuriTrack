@@ -24,6 +24,7 @@ import {
 } from '../utils/calculations';
 import MaterialCard from '../components/MaterialCard';
 import ConfigRow from '../components/ConfigRow';
+import AppIcon from '../components/AppIcon';
 import { persistLogoLocally, sendLogisticsEmail, stringToTemplateElements, templateElementsToString } from '../services/logisticsService';
 import type {
   AccentKey,
@@ -81,10 +82,10 @@ const LEGACY_STORAGE_KEYS = [
   'calcpack.bolsas.config.v2',
 ];
 
-const CATEGORIES: Array<{ key: MaterialCategory; label: string; badge: string }> = [
-  { key: 'bolsas', label: 'Bolsas', badge: '🛍️' },
-  { key: 'cajas', label: 'Cajas', badge: '📦' },
-  { key: 'otros', label: 'Otros', badge: '🧩' },
+const CATEGORIES: Array<{ key: MaterialCategory; label: string; icon: 'bolsas' | 'cajas' | 'otros' }> = [
+  { key: 'bolsas', label: 'Bolsas', icon: 'bolsas' },
+  { key: 'cajas', label: 'Cajas', icon: 'cajas' },
+  { key: 'otros', label: 'Otros', icon: 'otros' },
 ];
 
 const FOLIO_PREFIX_FALLBACK = 'CS';
@@ -932,7 +933,7 @@ export default function BolsasScreen({
               {preferences.logoSource ? (
                 <Image source={{ uri: preferences.logoSource }} style={{ width: 48, height: 48, borderRadius: 12 }} resizeMode="cover" />
               ) : (
-                <Text className="text-base">📋</Text>
+                <AppIcon name="brand" size={16} />
               )}
             </View>
           </View>
@@ -956,9 +957,7 @@ export default function BolsasScreen({
                 >
                   <View className="items-center gap-2">
                     <View className="h-6 w-6 items-center justify-center rounded border" style={{ borderColor: active ? themeColors.buttonTextOnAccent : themeColors.border }}>
-                      <Text className="text-sm" style={{ color: active ? themeColors.buttonTextOnAccent : themeColors.buttonText }}>
-                        {category.badge}
-                      </Text>
+                      <AppIcon name={category.icon} size={12} />
                     </View>
                     <Text className={`text-center text-sm font-semibold ${active ? 'text-white' : 'text-slate-300'}`} style={{ color: active ? themeColors.buttonTextOnAccent : themeColors.buttonText }}>
                       {category.label}
@@ -1176,7 +1175,7 @@ export default function BolsasScreen({
           <View className="mb-3 flex-row items-center justify-between">
             <View className="flex-row items-center gap-2">
               <View className="h-5 w-5 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
-                <Text className="text-[11px]">🧾</Text>
+                <AppIcon name="summary" size={10} />
               </View>
               <Text className="text-xl font-semibold text-slate-100">Resumen de solicitud</Text>
             </View>
@@ -1187,7 +1186,7 @@ export default function BolsasScreen({
             <View className="mb-2 rounded-ind border px-3 py-2" style={{ borderColor: accent.border, backgroundColor: isLightMode ? '#FFFFFF' : '#232A31' }}>
               <View className="mb-2 flex-row items-center gap-2">
                 <View className="h-4 w-4 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
-                  <Text className="text-[10px]">📧</Text>
+                  <AppIcon name="email" size={9} />
                 </View>
                 <Text className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300" style={{ color: themeColors.muted }}>Destino de envío</Text>
               </View>
@@ -1276,7 +1275,7 @@ export default function BolsasScreen({
           <Pressable onPress={() => setSettingsOpen((current) => !current)} className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-2">
               <View className="h-5 w-5 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
-                <Text className="text-[10px]">⚙️</Text>
+                <AppIcon name="settings" size={10} />
               </View>
               <Text className="text-base font-semibold text-white" style={{ color: themeColors.text }}>Personalización de app</Text>
             </View>
@@ -1288,7 +1287,7 @@ export default function BolsasScreen({
               <View className="mb-4 rounded-ind border border-industrial-border bg-industrial-bg px-4 py-4" style={{ backgroundColor: themeColors.panelBg, borderColor: themeColors.border }}>
                 <View className="mb-3 flex-row items-center gap-2">
                   <View className="h-4 w-4 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
-                    <Text className="text-[10px]">🎨</Text>
+                    <AppIcon name="style" size={9} />
                   </View>
                     <Text className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300" style={{ color: themeColors.muted }}>Marca, logo y exportación</Text>
                 </View>
@@ -1461,7 +1460,7 @@ export default function BolsasScreen({
                         {draftPreferences.logoSource ? (
                           <Image source={{ uri: draftPreferences.logoSource }} style={{ width: 56, height: 56, borderRadius: 12 }} resizeMode="cover" />
                         ) : (
-                          <Text className="text-base">🖼️</Text>
+                          <AppIcon name="image" size={16} />
                         )}
                       </View>
                       <View className="flex-1">

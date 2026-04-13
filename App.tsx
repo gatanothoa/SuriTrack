@@ -6,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import BolsasScreen from './src/screens/BolsasScreen';
+import AppIcon from './src/components/AppIcon';
 
 const STORAGE_KEY = 'calcpack.materials.config.v5';
 
@@ -138,7 +139,7 @@ export default function App() {
                 {headerPreferences.logoSource ? (
                   <Image source={{ uri: headerPreferences.logoSource }} style={{ width: 24, height: 24, borderRadius: 6 }} resizeMode="cover" />
                 ) : (
-                  <Text className="text-base">📋</Text>
+                  <AppIcon name="brand" size={16} />
                 )}
               </View>
               <View>

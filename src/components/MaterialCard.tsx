@@ -1,6 +1,7 @@
 import { Pressable, Text, View } from 'react-native';
 import { calculateRequestedUnit, calculateRequestedValue, formatNumber } from '../utils/calculations';
 import type { AccentPreset, MaterialOption, MaterialCalcMode, MaterialUnit } from '../types/logistics';
+import AppIcon from './AppIcon';
 
 type MaterialCardProps = {
   option: MaterialOption;
@@ -25,7 +26,7 @@ export default function MaterialCard({
 }: MaterialCardProps) {
   const resultValue = calculateRequestedValue(option);
   const resultUnit = calculateRequestedUnit(option);
-  const categoryIcon = option.category === 'bolsas' ? '🛍️' : option.category === 'cajas' ? '📦' : '🧩';
+  const categoryIcon = option.category === 'bolsas' ? 'bolsas' : option.category === 'cajas' ? 'cajas' : 'otros';
 
   return (
     <Pressable
@@ -37,7 +38,7 @@ export default function MaterialCard({
         <View className="flex-1">
           <View className="flex-row items-center gap-2">
             <View className="items-center justify-center rounded-ind border border-industrial-border bg-industrial-bg px-2 py-2">
-              <Text className="text-sm">{categoryIcon}</Text>
+              <AppIcon name={categoryIcon} size={12} />
             </View>
             <View className="flex-1">
               <Text className={`text-base font-semibold ${selected ? 'text-white' : 'text-slate-100'}`}>{option.title || 'Material sin nombre'}</Text>
