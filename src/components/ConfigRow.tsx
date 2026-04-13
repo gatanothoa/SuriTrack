@@ -13,14 +13,14 @@ type ConfigRowProps = {
 export default function ConfigRow({ item, accent, onChange, onDelete, unitLabel }: ConfigRowProps) {
   const invalidWeight = item.calcMode === 'bags' && item.weightPer100Kg <= 0;
   const displayWeight = convertFromKg(item.weightPer100Kg, item.weightUnit);
-  const categoryBadge = item.category === 'bolsas' ? 'B' : item.category === 'cajas' ? 'C' : 'O';
+  const categoryBadge = item.category === 'bolsas' ? '🛍️' : item.category === 'cajas' ? '📦' : '🧩';
 
   return (
     <View className="mb-3 rounded-ind border border-industrial-border bg-industrial-surface px-3 py-3">
       <View className="mb-3 flex-row items-center justify-between">
         <View className="flex-row items-center gap-2">
           <View className="h-5 w-5 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
-            <Text className="text-[11px] font-bold" style={{ color: accent.color }}>{categoryBadge}</Text>
+            <Text className="text-[11px]">{categoryBadge}</Text>
           </View>
           <Text className="text-sm font-semibold text-slate-100">{item.title || 'Material'}</Text>
         </View>

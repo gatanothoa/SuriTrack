@@ -82,9 +82,9 @@ const LEGACY_STORAGE_KEYS = [
 ];
 
 const CATEGORIES: Array<{ key: MaterialCategory; label: string; badge: string }> = [
-  { key: 'bolsas', label: 'Bolsas', badge: 'B' },
-  { key: 'cajas', label: 'Cajas', badge: 'C' },
-  { key: 'otros', label: 'Otros', badge: 'O' },
+  { key: 'bolsas', label: 'Bolsas', badge: '🛍️' },
+  { key: 'cajas', label: 'Cajas', badge: '📦' },
+  { key: 'otros', label: 'Otros', badge: '🧩' },
 ];
 
 const FOLIO_PREFIX_FALLBACK = 'CS';
@@ -932,7 +932,7 @@ export default function BolsasScreen({
               {preferences.logoSource ? (
                 <Image source={{ uri: preferences.logoSource }} style={{ width: 48, height: 48, borderRadius: 12 }} resizeMode="cover" />
               ) : (
-                <Text className="text-xs font-bold" style={{ color: accent.color }}>ST</Text>
+                <Text className="text-base">📋</Text>
               )}
             </View>
           </View>
@@ -956,7 +956,7 @@ export default function BolsasScreen({
                 >
                   <View className="items-center gap-2">
                     <View className="h-6 w-6 items-center justify-center rounded border" style={{ borderColor: active ? themeColors.buttonTextOnAccent : themeColors.border }}>
-                      <Text className="text-xs font-bold" style={{ color: active ? themeColors.buttonTextOnAccent : themeColors.buttonText }}>
+                      <Text className="text-sm" style={{ color: active ? themeColors.buttonTextOnAccent : themeColors.buttonText }}>
                         {category.badge}
                       </Text>
                     </View>
@@ -1176,7 +1176,7 @@ export default function BolsasScreen({
           <View className="mb-3 flex-row items-center justify-between">
             <View className="flex-row items-center gap-2">
               <View className="h-5 w-5 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
-                <Text className="text-[10px] font-bold" style={{ color: accent.color }}>RS</Text>
+                <Text className="text-[11px]">🧾</Text>
               </View>
               <Text className="text-xl font-semibold text-slate-100">Resumen de solicitud</Text>
             </View>
@@ -1187,7 +1187,7 @@ export default function BolsasScreen({
             <View className="mb-2 rounded-ind border px-3 py-2" style={{ borderColor: accent.border, backgroundColor: isLightMode ? '#FFFFFF' : '#232A31' }}>
               <View className="mb-2 flex-row items-center gap-2">
                 <View className="h-4 w-4 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
-                  <Text className="text-[9px] font-bold" style={{ color: accent.color }}>@</Text>
+                  <Text className="text-[10px]">📧</Text>
                 </View>
                 <Text className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300" style={{ color: themeColors.muted }}>Destino de envío</Text>
               </View>
@@ -1276,7 +1276,7 @@ export default function BolsasScreen({
           <Pressable onPress={() => setSettingsOpen((current) => !current)} className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-2">
               <View className="h-5 w-5 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
-                <Text className="text-[10px] font-bold" style={{ color: accent.color }}>CFG</Text>
+                <Text className="text-[10px]">⚙️</Text>
               </View>
               <Text className="text-base font-semibold text-white" style={{ color: themeColors.text }}>Personalización de app</Text>
             </View>
@@ -1288,7 +1288,7 @@ export default function BolsasScreen({
               <View className="mb-4 rounded-ind border border-industrial-border bg-industrial-bg px-4 py-4" style={{ backgroundColor: themeColors.panelBg, borderColor: themeColors.border }}>
                 <View className="mb-3 flex-row items-center gap-2">
                   <View className="h-4 w-4 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
-                    <Text className="text-[9px] font-bold" style={{ color: accent.color }}>UI</Text>
+                    <Text className="text-[10px]">🎨</Text>
                   </View>
                     <Text className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300" style={{ color: themeColors.muted }}>Marca, logo y exportación</Text>
                 </View>
@@ -1461,7 +1461,7 @@ export default function BolsasScreen({
                         {draftPreferences.logoSource ? (
                           <Image source={{ uri: draftPreferences.logoSource }} style={{ width: 56, height: 56, borderRadius: 12 }} resizeMode="cover" />
                         ) : (
-                          <Text className="text-xs font-bold" style={{ color: accent.color }}>IMG</Text>
+                          <Text className="text-base">🖼️</Text>
                         )}
                       </View>
                       <View className="flex-1">

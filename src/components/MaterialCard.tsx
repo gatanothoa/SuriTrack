@@ -25,6 +25,7 @@ export default function MaterialCard({
 }: MaterialCardProps) {
   const resultValue = calculateRequestedValue(option);
   const resultUnit = calculateRequestedUnit(option);
+  const categoryIcon = option.category === 'bolsas' ? '🛍️' : option.category === 'cajas' ? '📦' : '🧩';
 
   return (
     <Pressable
@@ -36,9 +37,7 @@ export default function MaterialCard({
         <View className="flex-1">
           <View className="flex-row items-center gap-2">
             <View className="items-center justify-center rounded-ind border border-industrial-border bg-industrial-bg px-2 py-2">
-              <Text className="text-xs font-bold" style={{ color: accent.color }}>
-                {categoryLabel(option.category).slice(0, 1).toUpperCase()}
-              </Text>
+              <Text className="text-sm">{categoryIcon}</Text>
             </View>
             <View className="flex-1">
               <Text className={`text-base font-semibold ${selected ? 'text-white' : 'text-slate-100'}`}>{option.title || 'Material sin nombre'}</Text>

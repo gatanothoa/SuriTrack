@@ -138,7 +138,7 @@ export default function App() {
                 {headerPreferences.logoSource ? (
                   <Image source={{ uri: headerPreferences.logoSource }} style={{ width: 24, height: 24, borderRadius: 6 }} resizeMode="cover" />
                 ) : (
-                  <Text className="text-xs font-bold" style={{ color: '#FFB020' }}>ST</Text>
+                  <Text className="text-base">📋</Text>
                 )}
               </View>
               <View>
