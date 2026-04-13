@@ -1,26 +1,27 @@
 import { Pressable, Text, TextInput, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { convertFromKg, convertToKg, isNonEmptyPositive, parseOptionalPositiveNumber } from '../utils/calculations';
-import type { AccentPreset, MaterialCategory, MaterialOption, MaterialUnit } from '../types/logistics';
+import type { AccentPreset, MaterialOption, MaterialUnit } from '../types/logistics';
 
 type ConfigRowProps = {
   item: MaterialOption;
   accent: AccentPreset;
   onChange: (id: string, patch: Partial<MaterialOption>) => void;
   onDelete: (id: string) => void;
-  categoryIcon: (category: MaterialCategory) => keyof typeof MaterialCommunityIcons.glyphMap;
   unitLabel: (unit: MaterialUnit) => string;
 };
 
-export default function ConfigRow({ item, accent, onChange, onDelete, categoryIcon, unitLabel }: ConfigRowProps) {
+export default function ConfigRow({ item, accent, onChange, onDelete, unitLabel }: ConfigRowProps) {
   const invalidWeight = item.calcMode === 'bags' && item.weightPer100Kg <= 0;
   const displayWeight = convertFromKg(item.weightPer100Kg, item.weightUnit);
+  const categoryBadge = item.category === 'bolsas' ? 'B' : item.category === 'cajas' ? 'C' : 'O';
 
   return (
     <View className="mb-3 rounded-ind border border-industrial-border bg-industrial-surface px-3 py-3">
       <View className="mb-3 flex-row items-center justify-between">
         <View className="flex-row items-center gap-2">
-          <MaterialCommunityIcons name={categoryIcon(item.category)} size={16} color={accent.color} />
+          <View className="h-5 w-5 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
+            <Text className="text-[11px] font-bold" style={{ color: accent.color }}>{categoryBadge}</Text>
+          </View>
           <Text className="text-sm font-semibold text-slate-100">{item.title || 'Material'}</Text>
         </View>
         <Pressable onPress={() => onDelete(item.id)} className="rounded-ind border px-3 py-1" style={{ borderColor: accent.border }}>

@@ -1,15 +1,13 @@
 import { Pressable, Text, View } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { calculateRequestedUnit, calculateRequestedValue, formatNumber } from '../utils/calculations';
-import type { AccentPreset, MaterialCategory, MaterialOption, MaterialCalcMode, MaterialUnit } from '../types/logistics';
+import type { AccentPreset, MaterialOption, MaterialCalcMode, MaterialUnit } from '../types/logistics';
 
 type MaterialCardProps = {
   option: MaterialOption;
   selected: boolean;
   accent: AccentPreset;
   onPress: () => void;
-  categoryIcon: (category: MaterialCategory) => keyof typeof MaterialCommunityIcons.glyphMap;
-  categoryLabel: (category: MaterialCategory) => string;
+  categoryLabel: (category: MaterialOption['category']) => string;
   modeLabel: (mode: MaterialCalcMode) => string;
   unitLabel: (unit: MaterialUnit) => string;
   getResultLabel: (material: MaterialOption) => string;
@@ -20,7 +18,6 @@ export default function MaterialCard({
   selected,
   accent,
   onPress,
-  categoryIcon,
   categoryLabel,
   modeLabel,
   unitLabel,
@@ -39,7 +36,9 @@ export default function MaterialCard({
         <View className="flex-1">
           <View className="flex-row items-center gap-2">
             <View className="items-center justify-center rounded-ind border border-industrial-border bg-industrial-bg px-2 py-2">
-              <MaterialCommunityIcons name={categoryIcon(option.category)} size={18} color={accent.color} />
+              <Text className="text-xs font-bold" style={{ color: accent.color }}>
+                {categoryLabel(option.category).slice(0, 1).toUpperCase()}
+              </Text>
             </View>
             <View className="flex-1">
               <Text className={`text-base font-semibold ${selected ? 'text-white' : 'text-slate-100'}`}>{option.title || 'Material sin nombre'}</Text>

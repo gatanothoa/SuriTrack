@@ -3,7 +3,6 @@ import './global.css';
 import { useCallback, useEffect, useState } from 'react';
 import { Image, StatusBar as RNStatusBar, Text, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import BolsasScreen from './src/screens/BolsasScreen';
@@ -139,7 +138,7 @@ export default function App() {
                 {headerPreferences.logoSource ? (
                   <Image source={{ uri: headerPreferences.logoSource }} style={{ width: 24, height: 24, borderRadius: 6 }} resizeMode="cover" />
                 ) : (
-                  <MaterialCommunityIcons name="clipboard-text-outline" size={22} color="#FFB020" />
+                  <Text className="text-xs font-bold" style={{ color: '#FFB020' }}>ST</Text>
                 )}
               </View>
               <View>

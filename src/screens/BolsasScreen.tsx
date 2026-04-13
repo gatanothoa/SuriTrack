@@ -11,7 +11,6 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
@@ -28,7 +27,6 @@ import ConfigRow from '../components/ConfigRow';
 import { persistLogoLocally, sendLogisticsEmail, stringToTemplateElements, templateElementsToString } from '../services/logisticsService';
 import type {
   AccentKey,
-  AvailableField,
   TemplateElement,
   AppPreferences,
   CartItem,
@@ -83,20 +81,16 @@ const LEGACY_STORAGE_KEYS = [
   'calcpack.bolsas.config.v2',
 ];
 
-const CATEGORIES: Array<{ key: MaterialCategory; label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }> = [
-  { key: 'bolsas', label: 'Bolsas', icon: 'bag-suitcase-outline' },
-  { key: 'cajas', label: 'Cajas', icon: 'package-variant-closed' },
-  { key: 'otros', label: 'Otros', icon: 'cube-outline' },
+const CATEGORIES: Array<{ key: MaterialCategory; label: string; badge: string }> = [
+  { key: 'bolsas', label: 'Bolsas', badge: 'B' },
+  { key: 'cajas', label: 'Cajas', badge: 'C' },
+  { key: 'otros', label: 'Otros', badge: 'O' },
 ];
 
 const FOLIO_PREFIX_FALLBACK = 'CS';
 
 function categoryLabel(category: MaterialCategory) {
   return CATEGORIES.find((item) => item.key === category)?.label ?? 'Otros';
-}
-
-function categoryIcon(category: MaterialCategory) {
-  return CATEGORIES.find((item) => item.key === category)?.icon ?? 'cube-outline';
 }
 
 function unitLabel(unit: MaterialUnit) {
@@ -600,32 +594,10 @@ export default function BolsasScreen({
   const panelStyle = { backgroundColor: themeColors.panelBg, borderColor: themeColors.border };
   const inputFieldStyle = { backgroundColor: themeColors.inputBg, borderColor: themeColors.border, color: themeColors.text };
 
-  function addFieldToTemplate(fieldName: AvailableField) {
-    // Agregar el campo al final del template actual
-    setDraftTemplateElements((current) => [
-      ...current,
-      { type: 'field', name: fieldName }
-    ]);
-  }
+  const templateEditorValue = useMemo(() => templateElementsToString(draftTemplateElements), [draftTemplateElements]);
 
-  function removeElementFromTemplate(index: number) {
-    // Remover un elemento en particular
-    setDraftTemplateElements((current) => current.filter((_, i) => i !== index));
-  }
-
-  function updateTextElement(index: number, content: string) {
-    // Actualizar el contenido de un elemento de texto
-    setDraftTemplateElements((current) => 
-      current.map((element, i) => 
-        i === index && element.type === 'text' 
-          ? { ...element, content } 
-          : element
-      )
-    );
-  }
-
-  function addTextBlockToTemplate() {
-    setDraftTemplateElements((current) => [...current, { type: 'text', content: 'Nuevo texto' }]);
+  function updateTemplateFromText(value: string) {
+    setDraftTemplateElements(stringToTemplateElements(value));
   }
 
   async function savePreferences() {
@@ -960,7 +932,7 @@ export default function BolsasScreen({
               {preferences.logoSource ? (
                 <Image source={{ uri: preferences.logoSource }} style={{ width: 48, height: 48, borderRadius: 12 }} resizeMode="cover" />
               ) : (
-                <MaterialCommunityIcons name="clipboard-text-outline" size={24} color={accent.color} />
+                <Text className="text-xs font-bold" style={{ color: accent.color }}>ST</Text>
               )}
             </View>
           </View>
@@ -983,7 +955,11 @@ export default function BolsasScreen({
                   style={active ? { borderColor: accent.border, backgroundColor: accent.color } : { borderColor: themeColors.border, backgroundColor: themeColors.inputBg }}
                 >
                   <View className="items-center gap-2">
-                    <MaterialCommunityIcons name={category.icon} size={18} color={active ? themeColors.buttonTextOnAccent : themeColors.muted} />
+                    <View className="h-6 w-6 items-center justify-center rounded border" style={{ borderColor: active ? themeColors.buttonTextOnAccent : themeColors.border }}>
+                      <Text className="text-xs font-bold" style={{ color: active ? themeColors.buttonTextOnAccent : themeColors.buttonText }}>
+                        {category.badge}
+                      </Text>
+                    </View>
                     <Text className={`text-center text-sm font-semibold ${active ? 'text-white' : 'text-slate-300'}`} style={{ color: active ? themeColors.buttonTextOnAccent : themeColors.buttonText }}>
                       {category.label}
                     </Text>
@@ -1113,8 +1089,7 @@ export default function BolsasScreen({
             style={accentSolidStyle}
           >
             <View className="flex-row items-center justify-center gap-2">
-              <MaterialCommunityIcons name="playlist-plus" size={18} color="#ffffff" />
-              <Text className="text-center text-sm font-semibold uppercase tracking-[0.18em] text-white">
+              <Text className="text-center text-sm font-semibold text-white" numberOfLines={2}>
                 Agregar material en {categoryLabel(selectedCategory)}
               </Text>
             </View>
@@ -1135,7 +1110,6 @@ export default function BolsasScreen({
             selected={item.id === selectedMaterialId}
             accent={accent}
             onPress={() => setSelectedMaterialId(item.id)}
-            categoryIcon={categoryIcon}
             categoryLabel={categoryLabel}
             modeLabel={modeLabel}
             unitLabel={unitLabel}
@@ -1194,15 +1168,16 @@ export default function BolsasScreen({
           style={accentSolidStyle}
         >
           <View className="flex-row items-center justify-center gap-2">
-            <MaterialCommunityIcons name="plus-box" size={20} color={themeColors.buttonTextOnAccent} />
-            <Text className="text-center text-sm font-bold uppercase tracking-[0.18em] text-white" style={{ color: themeColors.buttonTextOnAccent }}>Agregar a la solicitud</Text>
+            <Text className="text-center text-sm font-bold text-white" style={{ color: themeColors.buttonTextOnAccent }}>Agregar a la solicitud</Text>
           </View>
         </Pressable>
 
         <View className="mt-6">
           <View className="mb-3 flex-row items-center justify-between">
             <View className="flex-row items-center gap-2">
-              <MaterialCommunityIcons name="clipboard-list-outline" size={18} color={accent.color} />
+              <View className="h-5 w-5 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
+                <Text className="text-[10px] font-bold" style={{ color: accent.color }}>RS</Text>
+              </View>
               <Text className="text-xl font-semibold text-slate-100">Resumen de solicitud</Text>
             </View>
             <Text className="text-xs text-slate-400">Próximo folio: {buildRequestCode(preferences.folioPrefix, nextLeadNumber)}</Text>
@@ -1211,7 +1186,9 @@ export default function BolsasScreen({
           <View className="rounded-ind border border-industrial-border bg-industrial-bg p-2">
             <View className="mb-2 rounded-ind border px-3 py-2" style={{ borderColor: accent.border, backgroundColor: isLightMode ? '#FFFFFF' : '#232A31' }}>
               <View className="mb-2 flex-row items-center gap-2">
-                <MaterialCommunityIcons name="email-fast-outline" size={16} color={accent.color} />
+                <View className="h-4 w-4 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
+                  <Text className="text-[9px] font-bold" style={{ color: accent.color }}>@</Text>
+                </View>
                 <Text className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300" style={{ color: themeColors.muted }}>Destino de envío</Text>
               </View>
               <TextInput
@@ -1239,28 +1216,33 @@ export default function BolsasScreen({
             ) : (
               cartItems.map((item) => (
                 <View key={item.id} className="mb-1 rounded-ind border border-industrial-border bg-industrial-surface px-2 py-2" style={{ borderColor: themeColors.border, backgroundColor: themeColors.inputBg }}>
-                  <View className="flex-row items-center gap-2">
-                    <View className="flex-1">
-                      <Text className="text-sm font-semibold text-white" style={{ color: themeColors.text }}>{item.materialTitle}</Text>
-                      <Text className="text-[13px] text-industrial-muted" style={{ color: themeColors.muted }}>
-                        {categoryLabel(item.category)} · {modeLabel(item.calcMode)}
-                      </Text>
+                  <View className="gap-2">
+                    <View className="flex-row items-start justify-between gap-2">
+                      <View className="flex-1 pr-2">
+                        <Text className="text-sm font-semibold text-white" style={{ color: themeColors.text }}>{item.materialTitle}</Text>
+                        <Text className="text-[13px] text-industrial-muted" style={{ color: themeColors.muted }}>
+                          {categoryLabel(item.category)} · {modeLabel(item.calcMode)}
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={() => removeCartItem(item.id)}
+                        className="min-h-10 min-w-10 items-center justify-center rounded-ind border px-3 py-2"
+                        style={({ pressed }) => [accentBorderStyle, pressed ? { opacity: 0.82 } : undefined]}
+                      >
+                        <Text className="text-[12px] font-semibold" style={{ color: isLightMode ? themeColors.buttonText : accent.soft }}>Quitar</Text>
+                      </Pressable>
                     </View>
-                    <View className="items-end">
-                      <Text className="text-[13px] uppercase tracking-[0.12em] text-industrial-muted" style={{ color: themeColors.muted }}>Capt.</Text>
-                      <Text className="text-sm font-semibold text-white" style={{ color: themeColors.text }}>{formatNumber(item.requestValue)}</Text>
+
+                    <View className="flex-row flex-wrap gap-3">
+                      <View className="rounded-ind border px-2 py-1" style={{ borderColor: themeColors.border }}>
+                        <Text className="text-[11px] uppercase tracking-[0.1em]" style={{ color: themeColors.muted }}>Capt.</Text>
+                        <Text className="text-sm font-semibold" style={{ color: themeColors.text }}>{formatNumber(item.requestValue)}</Text>
+                      </View>
+                      <View className="rounded-ind border px-2 py-1" style={{ borderColor: themeColors.border }}>
+                        <Text className="text-[11px] uppercase tracking-[0.1em]" style={{ color: themeColors.muted }}>Res.</Text>
+                        <Text className="text-sm font-semibold" style={{ color: themeColors.text }}>{formatNumber(item.calculatedValue)}</Text>
+                      </View>
                     </View>
-                    <View className="items-end">
-                      <Text className="text-[13px] uppercase tracking-[0.12em] text-industrial-muted" style={{ color: themeColors.muted }}>Res.</Text>
-                      <Text className="text-sm font-semibold text-white" style={{ color: themeColors.text }}>{formatNumber(item.calculatedValue)}</Text>
-                    </View>
-                    <Pressable
-                      onPress={() => removeCartItem(item.id)}
-                      className="min-h-12 min-w-12 items-center justify-center rounded-ind border px-3 py-2"
-                      style={({ pressed }) => [accentBorderStyle, pressed ? { opacity: 0.82 } : undefined]}
-                    >
-                      <Text className="text-[13px] font-semibold" style={{ color: isLightMode ? themeColors.buttonText : accent.soft }}>Quitar</Text>
-                    </Pressable>
                   </View>
                 </View>
               ))
@@ -1293,17 +1275,21 @@ export default function BolsasScreen({
         <View className="mt-4 rounded-ind border border-industrial-border bg-industrial-bg px-4 py-4" style={{ backgroundColor: themeColors.panelBg, borderColor: themeColors.border }}>
           <Pressable onPress={() => setSettingsOpen((current) => !current)} className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-2">
-              <MaterialCommunityIcons name="tune-variant" size={18} color={accent.color} />
+              <View className="h-5 w-5 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
+                <Text className="text-[10px] font-bold" style={{ color: accent.color }}>CFG</Text>
+              </View>
               <Text className="text-base font-semibold text-white" style={{ color: themeColors.text }}>Personalización de app</Text>
             </View>
-            <MaterialCommunityIcons name={settingsOpen ? 'chevron-up' : 'chevron-down'} size={20} color={themeColors.muted} />
+            <Text className="text-base font-bold" style={{ color: themeColors.muted }}>{settingsOpen ? '˄' : '˅'}</Text>
           </Pressable>
 
           {settingsOpen ? (
             <View className="mt-4">
               <View className="mb-4 rounded-ind border border-industrial-border bg-industrial-bg px-4 py-4" style={{ backgroundColor: themeColors.panelBg, borderColor: themeColors.border }}>
                 <View className="mb-3 flex-row items-center gap-2">
-                  <MaterialCommunityIcons name="palette-outline" size={16} color={accent.color} />
+                  <View className="h-4 w-4 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
+                    <Text className="text-[9px] font-bold" style={{ color: accent.color }}>UI</Text>
+                  </View>
                     <Text className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300" style={{ color: themeColors.muted }}>Marca, logo y exportación</Text>
                 </View>
 
@@ -1407,64 +1393,20 @@ export default function BolsasScreen({
                 />
 
                 <Text className="mb-1 text-xs text-slate-400" style={{ color: themeColors.muted }}>Machote del correo</Text>
-                
-                {/* Área editable del machote con chips */}
-                <View className="mb-4 rounded-ind border border-industrial-border bg-industrial-bg px-3 py-3 min-h-[180px]" style={{ backgroundColor: themeColors.inputBg, borderColor: themeColors.border }}>
-                  <View className="flex-row flex-wrap items-center gap-2">
-                    {draftTemplateElements.length === 0 ? (
-                      <Text className="text-slate-500 text-xs" style={{ color: themeColors.muted }}>Vacío - agrega campos abajo</Text>
-                    ) : (
-                      draftTemplateElements.map((element, index) => (
-                        <View key={index} className="flex-row items-center gap-1">
-                          {element.type === 'text' ? (
-                            <View className="flex-row items-center rounded-ind border border-industrial-border px-2 py-1" style={{ borderColor: themeColors.chipTextBorder, backgroundColor: themeColors.chipTextBg }}>
-                              <TextInput
-                                value={element.content}
-                                onChangeText={(value) => updateTextElement(index, value)}
-                                placeholder="Texto"
-                                placeholderTextColor={themeColors.muted}
-                                className="min-w-[120px] text-sm"
-                                style={{ color: themeColors.text }}
-                              />
-                              <Pressable onPress={() => removeElementFromTemplate(index)} className="ml-1">
-                                <MaterialCommunityIcons name="close" size={14} color={themeColors.muted} />
-                              </Pressable>
-                            </View>
-                          ) : (
-                            <View className="flex-row items-center gap-1 px-2 py-1 rounded-ind border" style={{ backgroundColor: themeColors.chipFieldBg, borderColor: themeColors.chipFieldBorder }}>
-                              <Text className="text-white text-xs font-semibold">{element.name}</Text>
-                              <Pressable onPress={() => removeElementFromTemplate(index)}>
-                                <MaterialCommunityIcons name="close" size={14} color="#ffffff" />
-                              </Pressable>
-                            </View>
-                          )}
-                        </View>
-                      ))
-                    )}
-                  </View>
-                </View>
-
-                {/* Botones para agregar campos */}
-                <Text className="mb-2 text-xs text-slate-400" style={{ color: themeColors.muted }}>Campos disponibles (click para agregar):</Text>
-                <View className="mb-3 flex-row flex-wrap gap-2">
-                  <Pressable
-                    onPress={addTextBlockToTemplate}
-                    className="rounded-ind px-3 py-2 border border-industrial-border"
-                    style={{ borderColor: themeColors.border, backgroundColor: themeColors.chipTextBg }}
-                  >
-                    <Text className="text-xs font-semibold uppercase" style={{ color: themeColors.text }}>+ texto</Text>
-                  </Pressable>
-                  {(['logo', 'greeting', 'folio', 'totalMaterials', 'totalPieces', 'totalKg', 'attachmentNote', 'emailNote'] as const).map((fieldName) => (
-                    <Pressable 
-                      key={fieldName} 
-                      onPress={() => addFieldToTemplate(fieldName)}
-                      className="rounded-ind px-3 py-2 border"
-                      style={{ backgroundColor: themeColors.chipFieldBg, borderColor: themeColors.chipFieldBorder }}
-                    >
-                      <Text className="text-xs font-semibold text-white uppercase">{fieldName}</Text>
-                    </Pressable>
-                  ))}
-                </View>
+                <TextInput
+                  value={templateEditorValue}
+                  onChangeText={updateTemplateFromText}
+                  multiline
+                  numberOfLines={8}
+                  textAlignVertical="top"
+                  placeholder="Escribe el machote y usa placeholders entre llaves."
+                  placeholderTextColor={themeColors.muted}
+                  className="mb-2 min-h-[170px] rounded-ind border border-industrial-border bg-industrial-surface px-3 py-3 text-white"
+                  style={inputFieldStyle}
+                />
+                <Text className="mb-3 text-xs" style={{ color: themeColors.muted }}>
+                  Placeholders: {'{logo}'} {'{greeting}'} {'{folio}'} {'{totalMaterials}'} {'{totalPieces}'} {'{totalKg}'} {'{attachmentNote}'} {'{emailNote}'}
+                </Text>
 
                   <Text className="mb-1 text-xs text-slate-400" style={{ color: themeColors.muted }}>Texto para Excel / CSV</Text>
                   <TextInput
@@ -1519,7 +1461,7 @@ export default function BolsasScreen({
                         {draftPreferences.logoSource ? (
                           <Image source={{ uri: draftPreferences.logoSource }} style={{ width: 56, height: 56, borderRadius: 12 }} resizeMode="cover" />
                         ) : (
-                          <MaterialCommunityIcons name="image-outline" size={22} color={accent.color} />
+                          <Text className="text-xs font-bold" style={{ color: accent.color }}>IMG</Text>
                         )}
                       </View>
                       <View className="flex-1">
@@ -1578,7 +1520,7 @@ export default function BolsasScreen({
                         pressed ? { opacity: 0.84 } : undefined,
                       ]}
                     >
-                      <Text className="text-xs font-semibold uppercase tracking-[0.18em] text-white" style={{ color: themeColors.buttonTextOnAccent }}>Guardar cambios</Text>
+                      <Text className="text-xs font-semibold uppercase tracking-[0.08em] text-white" style={{ color: themeColors.buttonTextOnAccent }}>Guardar cambios</Text>
                     </Pressable>
                   </View>
               </View>
@@ -1590,7 +1532,6 @@ export default function BolsasScreen({
                   accent={accent}
                   onChange={updateMaterialById}
                   onDelete={removeMaterial}
-                  categoryIcon={categoryIcon}
                   unitLabel={unitLabel}
                 />
               ))}
