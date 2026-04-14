@@ -213,7 +213,7 @@ function getGreetingByHour(date: Date) {
 }
 
 function isValidEmail(value: string) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+  return /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/.test(value.trim());
 }
 
 async function triggerStatusFeedback(kind: 'success' | 'error') {
@@ -221,12 +221,16 @@ async function triggerStatusFeedback(kind: 'success' | 'error') {
     return;
   }
 
-  if (kind === 'success') {
-    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    return;
-  }
+  try {
+    if (kind === 'success') {
+      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      return;
+    }
 
-  await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+    await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+  } catch {
+    // No bloquear la UX si el dispositivo no soporta feedback háptico.
+  }
 }
 
 function normalizePreferenceText(value: string, fallback: string) {
@@ -663,12 +667,30 @@ export default function BolsasScreen({
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/*';
+        input.style.display = 'none';
+        document.body.appendChild(input);
+
+        let resolved = false;
+        const finish = () => {
+          if (resolved) {
+            return;
+          }
+          resolved = true;
+          input.onchange = null;
+          input.remove();
+          resolve();
+        };
+
+        const fallbackTimer = setTimeout(() => {
+          finish();
+        }, 15000);
 
         input.onchange = () => {
           const file = input.files?.[0];
 
           if (!file) {
-            resolve();
+            clearTimeout(fallbackTimer);
+            finish();
             return;
           }
 
@@ -684,10 +706,14 @@ export default function BolsasScreen({
               }));
             }
 
-            resolve();
+            clearTimeout(fallbackTimer);
+            finish();
           };
 
-          reader.onerror = () => resolve();
+          reader.onerror = () => {
+            clearTimeout(fallbackTimer);
+            finish();
+          };
           reader.readAsDataURL(file);
         };
 

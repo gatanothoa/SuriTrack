@@ -373,7 +373,6 @@ export type SendLogisticsEmailResult = {
 export async function sendLogisticsEmail({ recipientEmail, requestCode, cartItems, preferences, greeting }: SendLogisticsEmailParams): Promise<SendLogisticsEmailResult> {
   const now = new Date();
   const { totalItems, totalPieces, totalKg } = calculateTotals(cartItems);
-  console.log(`[logisticsService] totalKg calculado antes de envio: ${totalKg}`);
   const subject = `Solicitud de material auxiliar ${requestCode} ${now.toLocaleDateString('es-MX')}`;
   const logoDataUri = await resolveLogoAsDataUri(preferences.logoSource);
 
@@ -433,9 +432,8 @@ export async function sendLogisticsEmail({ recipientEmail, requestCode, cartItem
   }
 
   const csv = buildCsv(cartItems, requestCode);
-  const csvRowCount = csv.split('\n').length;
-  console.log(`[logisticsService] CSV generado con ${csvRowCount} filas`);
-  const fileName = `Solicitud_material_auxiliar_${requestCode}_${now.toISOString().slice(0, 10)}.csv`;
+  const safeRequestCode = requestCode.replace(/[^A-Z0-9-]/gi, '');
+  const fileName = `Solicitud_material_auxiliar_${safeRequestCode}_${now.toISOString().slice(0, 10)}_${Date.now()}.csv`;
   const baseDirectory = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;
 
   if (!baseDirectory) {
@@ -451,9 +449,6 @@ export async function sendLogisticsEmail({ recipientEmail, requestCode, cartItem
     encoding: FileSystem.EncodingType.UTF8,
   });
 
-  if (logoDataUri) {
-    console.log('[logisticsService] Logo recuperado exitosamente');
-  }
   const templateBodyHtml = buildTemplateHtml(renderedTemplateBody);
 
   const htmlBody = `
