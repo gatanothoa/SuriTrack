@@ -3,16 +3,24 @@ import { Asset } from 'expo-asset';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as MailComposer from 'expo-mail-composer';
 import { convertWeightUnitToKg, formatNumber, formatPieces, formatWeight } from '../utils/calculations';
-import type { AppPreferences, CartItem, MaterialCalcMode, MaterialCategory, MaterialUnit, TemplateElement, AvailableField } from '../types/logistics';
+import type { AppPreferences, CartItem, MaterialCalcMode, MaterialCategory, MaterialUnit, TemplateElement, AvailableField, CategoryDisplayNames } from '../types/logistics';
 
-function categoryLabel(category: MaterialCategory) {
+const DEFAULT_CATEGORY_DISPLAY_NAMES: CategoryDisplayNames = {
+  bolsas: 'Bolsas',
+  cajas: 'Cajas',
+  otros: 'Otros',
+};
+
+function categoryLabel(category: MaterialCategory, categoryDisplayNames?: CategoryDisplayNames) {
+  const names = categoryDisplayNames ?? DEFAULT_CATEGORY_DISPLAY_NAMES;
+
   switch (category) {
     case 'bolsas':
-      return 'Bolsas';
+      return names.bolsas;
     case 'cajas':
-      return 'Cajas';
+      return names.cajas;
     default:
-      return 'Otros';
+      return names.otros;
   }
 }
 
@@ -303,7 +311,7 @@ async function resolveLogoAsDataUri(logoSource: string) {
   }
 }
 
-function buildCsv(items: CartItem[], requestCode: string) {
+function buildCsv(items: CartItem[], requestCode: string, categoryDisplayNames?: CategoryDisplayNames) {
   const headers = [
     'FOLIO',
     'CATEGORIA',
@@ -318,7 +326,7 @@ function buildCsv(items: CartItem[], requestCode: string) {
 
   const rows = items.map((item) => [
     requestCode,
-    categoryLabel(item.category),
+    categoryLabel(item.category, categoryDisplayNames),
     item.materialTitle,
     modeLabel(item.calcMode),
     formatNumber(item.requestValue),
@@ -431,7 +439,7 @@ export async function sendLogisticsEmail({ recipientEmail, requestCode, cartItem
     };
   }
 
-  const csv = buildCsv(cartItems, requestCode);
+  const csv = buildCsv(cartItems, requestCode, preferences.categoryDisplayNames);
   const safeRequestCode = requestCode.replace(/[^A-Z0-9-]/gi, '');
   const fileName = `Solicitud_material_auxiliar_${safeRequestCode}_${now.toISOString().slice(0, 10)}_${Date.now()}.csv`;
   const baseDirectory = FileSystem.cacheDirectory ?? FileSystem.documentDirectory;

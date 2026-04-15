@@ -63,6 +63,11 @@ describe('logisticsService', () => {
         logoSource: 'data:image/png;base64,AAAA',
         logoLabel: 'logo',
         accentKey: 'red',
+        categoryDisplayNames: {
+          bolsas: 'Bolsas',
+          cajas: 'Cajas',
+          otros: 'Otros',
+        },
       },
       cartItems: [
         {

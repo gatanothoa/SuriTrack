@@ -15,6 +15,9 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as XLSX from 'xlsx';
 import {
   calculateRequestedUnit,
   calculateRequestedValue,
@@ -34,6 +37,7 @@ import type {
   HeaderPreferencesPayload,
   MaterialCalcMode,
   MaterialCategory,
+  CategoryDisplayNames,
   MaterialDraft,
   MaterialOption,
   MaterialUnit,
@@ -62,6 +66,12 @@ const UI_COLORS = {
   darkBorder: '#1F3F73',
 };
 
+const DEFAULT_CATEGORY_DISPLAY_NAMES: CategoryDisplayNames = {
+  bolsas: 'Bolsas',
+  cajas: 'Cajas',
+  otros: 'Otros',
+};
+
 const DEFAULT_PREFERENCES: AppPreferences = {
   appName: 'SurtiTrack',
   headerSubtitle: 'Solicitud logística corporativa',
@@ -87,6 +97,7 @@ const DEFAULT_PREFERENCES: AppPreferences = {
   logoSource: '',
   logoLabel: 'Logo de la empresa',
   accentKey: 'blue',
+  categoryDisplayNames: DEFAULT_CATEGORY_DISPLAY_NAMES,
 };
 
 const STORAGE_KEY = 'calcpack.materials.config.v5';
@@ -97,16 +108,32 @@ const LEGACY_STORAGE_KEYS = [
   'calcpack.bolsas.config.v2',
 ];
 
-const CATEGORIES: Array<{ key: MaterialCategory; label: string; icon: keyof typeof MaterialCommunityIcons.glyphMap }> = [
-  { key: 'bolsas', label: 'Bolsas', icon: 'bag-suitcase-outline' },
-  { key: 'cajas', label: 'Cajas', icon: 'package-variant-closed' },
-  { key: 'otros', label: 'Otros', icon: 'cube-outline' },
+const CATEGORIES: Array<{ key: MaterialCategory; icon: keyof typeof MaterialCommunityIcons.glyphMap }> = [
+  { key: 'bolsas', icon: 'bag-suitcase-outline' },
+  { key: 'cajas', icon: 'package-variant-closed' },
+  { key: 'otros', icon: 'cube-outline' },
 ];
 
 const FOLIO_PREFIX_FALLBACK = 'CS';
 
-function categoryLabel(category: MaterialCategory) {
-  return CATEGORIES.find((item) => item.key === category)?.label ?? 'Otros';
+function normalizeCategoryDisplayNames(value?: Partial<CategoryDisplayNames> | null): CategoryDisplayNames {
+  return {
+    bolsas: value?.bolsas?.trim() || DEFAULT_CATEGORY_DISPLAY_NAMES.bolsas,
+    cajas: value?.cajas?.trim() || DEFAULT_CATEGORY_DISPLAY_NAMES.cajas,
+    otros: value?.otros?.trim() || DEFAULT_CATEGORY_DISPLAY_NAMES.otros,
+  };
+}
+
+function categoryLabel(category: MaterialCategory, categoryDisplayNames: CategoryDisplayNames = DEFAULT_CATEGORY_DISPLAY_NAMES) {
+  if (category === 'bolsas') {
+    return categoryDisplayNames.bolsas;
+  }
+
+  if (category === 'cajas') {
+    return categoryDisplayNames.cajas;
+  }
+
+  return categoryDisplayNames.otros;
 }
 
 function categoryIcon(category: MaterialCategory) {
@@ -238,6 +265,169 @@ function normalizePreferenceText(value: string, fallback: string) {
   return normalized || fallback;
 }
 
+function normalizeColumnKey(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function parseCategoryValue(value: string): MaterialCategory | null {
+  const normalized = normalizeColumnKey(value);
+
+  if (normalized === 'bolsas' || normalized === 'bolsa') {
+    return 'bolsas';
+  }
+
+  if (normalized === 'cajas' || normalized === 'caja') {
+    return 'cajas';
+  }
+
+  if (normalized === 'otros' || normalized === 'otro') {
+    return 'otros';
+  }
+
+  return null;
+}
+
+function parseModeValue(value: string, category: MaterialCategory): MaterialCalcMode {
+  const normalized = normalizeColumnKey(value);
+
+  if (normalized === 'bags' || normalized === 'bag' || normalized === 'bolsas' || normalized === 'bolsa') {
+    return 'bags';
+  }
+
+  if (normalized === 'pieces' || normalized === 'piezas' || normalized === 'pieza' || normalized === 'cajas' || normalized === 'caja') {
+    return 'pieces';
+  }
+
+  if (normalized === 'other' || normalized === 'otros' || normalized === 'otro') {
+    return 'other';
+  }
+
+  if (category === 'bolsas') {
+    return 'bags';
+  }
+
+  if (category === 'cajas') {
+    return 'pieces';
+  }
+
+  return 'other';
+}
+
+function parseRequestUnitValue(value: string, fallback: MaterialUnit): MaterialUnit {
+  const normalized = normalizeColumnKey(value);
+
+  if (normalized === 'pieces' || normalized === 'pieza' || normalized === 'piezas' || normalized === 'pc') {
+    return 'pieces';
+  }
+
+  if (normalized === 'kg' || normalized === 'kilo' || normalized === 'kilos') {
+    return 'kg';
+  }
+
+  if (normalized === 'g' || normalized === 'gramo' || normalized === 'gramos') {
+    return 'g';
+  }
+
+  if (normalized === 'l' || normalized === 'lt' || normalized === 'litro' || normalized === 'litros') {
+    return 'l';
+  }
+
+  return fallback;
+}
+
+function parseWeightUnitValue(value: string): 'kg' | 'g' {
+  const normalized = normalizeColumnKey(value);
+
+  if (normalized === 'g' || normalized === 'gramo' || normalized === 'gramos') {
+    return 'g';
+  }
+
+  return 'kg';
+}
+
+function getRowValue(row: Record<string, unknown>, aliases: string[]) {
+  for (const alias of aliases) {
+    const key = normalizeColumnKey(alias);
+    if (key in row) {
+      return row[key];
+    }
+  }
+
+  return undefined;
+}
+
+function parseImportedMaterials(
+  rows: Array<Record<string, unknown>>,
+  categoryDisplayNames: CategoryDisplayNames
+): { materials: MaterialOption[]; errors: string[] } {
+  const materials: MaterialOption[] = [];
+  const errors: string[] = [];
+
+  rows.forEach((rawRow, index) => {
+    const rowNumber = index + 2;
+    const normalizedRow = Object.fromEntries(
+      Object.entries(rawRow).map(([key, value]) => [normalizeColumnKey(String(key)), value])
+    );
+
+    const categoryRaw = String(getRowValue(normalizedRow, ['categoria', 'category']) ?? '').trim();
+    const titleRaw = String(getRowValue(normalizedRow, ['titulo', 'nombre', 'material', 'title']) ?? '').trim();
+    const modeRaw = String(getRowValue(normalizedRow, ['modo', 'calc_mode', 'mode']) ?? '').trim();
+    const requestUnitRaw = String(getRowValue(normalizedRow, ['unidad_solicitud', 'request_unit', 'unidad']) ?? '').trim();
+    const weightPer100Raw = String(getRowValue(normalizedRow, ['peso_por_100', 'weight_per_100', 'peso100']) ?? '').trim();
+    const weightUnitRaw = String(getRowValue(normalizedRow, ['unidad_peso', 'weight_unit']) ?? '').trim();
+
+    if (!categoryRaw && !titleRaw && !modeRaw && !requestUnitRaw && !weightPer100Raw && !weightUnitRaw) {
+      return;
+    }
+
+    const category = parseCategoryValue(categoryRaw);
+
+    if (!category) {
+      errors.push(`Fila ${rowNumber}: categoria inválida (${categoryRaw || 'vacía'}). Usa bolsas, cajas u otros.`);
+      return;
+    }
+
+    if (!titleRaw) {
+      errors.push(`Fila ${rowNumber}: falta titulo.`);
+      return;
+    }
+
+    const fallbackRequestUnit: MaterialUnit = category === 'bolsas' || category === 'cajas' ? 'pieces' : 'kg';
+    const mode = parseModeValue(modeRaw, category);
+    const requestUnit = parseRequestUnitValue(requestUnitRaw, fallbackRequestUnit);
+    const weightUnit = parseWeightUnitValue(weightUnitRaw);
+
+    const parsedWeight = parseOptionalPositiveNumber(weightPer100Raw);
+    const normalizedWeightPer100 = convertToKg(parsedWeight, weightUnit);
+
+    if (mode === 'bags' && !isNonEmptyPositive(normalizedWeightPer100)) {
+      errors.push(`Fila ${rowNumber}: para modo bags debes indicar peso_por_100 válido (> 0).`);
+      return;
+    }
+
+    const itemIndex = materials.filter((item) => item.category === category).length + 1;
+    const base = createMaterialTemplate(category, itemIndex, requestUnit, categoryDisplayNames);
+
+    materials.push({
+      ...base,
+      id: `import-${Date.now()}-${index}`,
+      title: titleRaw,
+      calcMode: mode,
+      requestUnit,
+      weightPer100Kg: mode === 'bags' ? normalizedWeightPer100 : 0,
+      weightUnit,
+    });
+  });
+
+  return { materials, errors };
+}
+
 function preferencesAreEqual(left: AppPreferences, right: AppPreferences) {
   return (
     left.appName === right.appName &&
@@ -249,15 +439,23 @@ function preferencesAreEqual(left: AppPreferences, right: AppPreferences) {
     left.sheetNote === right.sheetNote &&
     left.logoSource === right.logoSource &&
     left.logoLabel === right.logoLabel &&
-    left.accentKey === right.accentKey
+    left.accentKey === right.accentKey &&
+    left.categoryDisplayNames.bolsas === right.categoryDisplayNames.bolsas &&
+    left.categoryDisplayNames.cajas === right.categoryDisplayNames.cajas &&
+    left.categoryDisplayNames.otros === right.categoryDisplayNames.otros
   );
 }
 
-function createMaterialTemplate(category: MaterialCategory, index: number, requestUnit: MaterialUnit = 'kg'): MaterialOption {
+function createMaterialTemplate(
+  category: MaterialCategory,
+  index: number,
+  requestUnit: MaterialUnit = 'kg',
+  categoryDisplayNames: CategoryDisplayNames = DEFAULT_CATEGORY_DISPLAY_NAMES
+): MaterialOption {
   const base: MaterialOption = {
     id: `${category}-${Date.now()}-${index}`,
     category,
-    title: `${categoryLabel(category)} ${index}`,
+    title: `${categoryLabel(category, categoryDisplayNames)} ${index}`,
     calcMode: 'other',
     requestValue: 0,
     requestUnit,
@@ -325,6 +523,8 @@ export default function BolsasScreen({
     inputBg: isDarkTheme ? UI_COLORS.darkBackground : UI_COLORS.white,
     inputBorder: isDarkTheme ? UI_COLORS.darkBorder : UI_COLORS.border,
   };
+  const categoryDisplayNames = normalizeCategoryDisplayNames(draftPreferences.categoryDisplayNames);
+  const categoryLabelForUi = (category: MaterialCategory) => categoryLabel(category, categoryDisplayNames);
   const [drafts, setDrafts] = useState<Record<MaterialCategory, MaterialDraft>>({
     bolsas: { title: '', weightInput: '', weightUnit: 'g', otherUnit: 'kg' },
     cajas: { title: '', weightInput: '', weightUnit: 'kg', otherUnit: 'kg' },
@@ -509,6 +709,7 @@ export default function BolsasScreen({
               parsed.preferences.accentKey && ACCENT_PRESETS[parsed.preferences.accentKey]
                 ? parsed.preferences.accentKey
                 : DEFAULT_PREFERENCES.accentKey,
+            categoryDisplayNames: normalizeCategoryDisplayNames(parsed.preferences.categoryDisplayNames),
           };
 
           setPreferences(nextPreferences);
@@ -640,6 +841,7 @@ export default function BolsasScreen({
         : persistedLogo.logoSource,
       logoLabel: normalizePreferenceText(persistedLogo.logoLabel, DEFAULT_PREFERENCES.logoLabel),
       accentKey: ACCENT_PRESETS[draftPreferences.accentKey] ? draftPreferences.accentKey : DEFAULT_PREFERENCES.accentKey,
+      categoryDisplayNames: normalizeCategoryDisplayNames(draftPreferences.categoryDisplayNames),
     };
 
     setPreferences(nextPreferences);
@@ -750,6 +952,87 @@ export default function BolsasScreen({
     }));
   }
 
+  async function importMaterialsDatabase() {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          'application/vnd.ms-excel',
+          'text/csv',
+        ],
+        multiple: false,
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets.length) {
+        return;
+      }
+
+      const file = result.assets[0];
+      const lowerName = (file.name || '').toLowerCase();
+      const isCsv = lowerName.endsWith('.csv') || file.mimeType === 'text/csv';
+      const readEncoding = isCsv ? FileSystem.EncodingType.UTF8 : FileSystem.EncodingType.Base64;
+      const fileContent = await FileSystem.readAsStringAsync(file.uri, { encoding: readEncoding });
+
+      const workbook = isCsv
+        ? XLSX.read(fileContent, { type: 'string' })
+        : XLSX.read(fileContent, { type: 'base64' });
+
+      const firstSheetName = workbook.SheetNames[0];
+
+      if (!firstSheetName) {
+        setStatusMessage('El archivo no contiene hojas para importar.');
+        setStatusType('error');
+        return;
+      }
+
+      const worksheet = workbook.Sheets[firstSheetName];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: '' });
+      const { materials: importedMaterials, errors } = parseImportedMaterials(rows, categoryDisplayNames);
+
+      if (errors.length > 0) {
+        setStatusMessage(`Importación con errores: ${errors[0]}${errors.length > 1 ? ` (+${errors.length - 1} más)` : ''}`);
+        setStatusType('error');
+        return;
+      }
+
+      if (importedMaterials.length === 0) {
+        setStatusMessage('No se encontraron registros válidos para importar.');
+        setStatusType('error');
+        return;
+      }
+
+      Alert.alert('Importar base de datos', `Se detectaron ${importedMaterials.length} materiales.`, [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Reemplazar',
+          style: 'destructive',
+          onPress: () => {
+            setMaterials(importedMaterials);
+            setCartItems([]);
+            setSelectedCategory(importedMaterials[0]?.category ?? 'bolsas');
+            setSelectedMaterialId(importedMaterials[0]?.id ?? '');
+            setStatusMessage(`Base importada: ${importedMaterials.length} materiales (reemplazo).`);
+            setStatusType('success');
+          },
+        },
+        {
+          text: 'Agregar',
+          onPress: () => {
+            setMaterials((current) => [...importedMaterials, ...current]);
+            setSelectedCategory(importedMaterials[0]?.category ?? 'bolsas');
+            setSelectedMaterialId(importedMaterials[0]?.id ?? '');
+            setStatusMessage(`Base importada: ${importedMaterials.length} materiales agregados.`);
+            setStatusType('success');
+          },
+        },
+      ]);
+    } catch {
+      setStatusMessage('No se pudo importar el archivo. Verifica que sea Excel/CSV con columnas válidas.');
+      setStatusType('error');
+    }
+  }
+
   function updateMaterialById(id: string, patch: Partial<MaterialOption>) {
     setMaterials((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)));
   }
@@ -787,7 +1070,7 @@ export default function BolsasScreen({
         return;
       }
 
-      const next = createMaterialTemplate(selectedCategory, index);
+      const next = createMaterialTemplate(selectedCategory, index, 'kg', categoryDisplayNames);
       next.title = trimmedName;
       next.weightPer100Kg = normalizedWeightKg;
       next.weightUnit = draft.weightUnit;
@@ -795,13 +1078,13 @@ export default function BolsasScreen({
       setMaterials((current) => [...current, next]);
       setSelectedMaterialId(next.id);
       resetDraft(selectedCategory);
-      setStatusMessage(`Material agregado en ${categoryLabel(selectedCategory)}.`);
+      setStatusMessage(`Material agregado en ${categoryLabelForUi(selectedCategory)}.`);
       setStatusType('success');
       return;
     }
 
     if (selectedCategory === 'cajas') {
-      const next = createMaterialTemplate(selectedCategory, index, 'pieces');
+      const next = createMaterialTemplate(selectedCategory, index, 'pieces', categoryDisplayNames);
       next.title = trimmedName;
       next.requestUnit = 'pieces';
       next.calcMode = 'pieces';
@@ -809,12 +1092,12 @@ export default function BolsasScreen({
       setMaterials((current) => [...current, next]);
       setSelectedMaterialId(next.id);
       resetDraft(selectedCategory);
-      setStatusMessage(`Material agregado en ${categoryLabel(selectedCategory)}.`);
+      setStatusMessage(`Material agregado en ${categoryLabelForUi(selectedCategory)}.`);
       setStatusType('success');
       return;
     }
 
-    const next = createMaterialTemplate(selectedCategory, index, draft.otherUnit);
+    const next = createMaterialTemplate(selectedCategory, index, draft.otherUnit, categoryDisplayNames);
     next.title = trimmedName;
     next.requestUnit = draft.otherUnit;
     next.calcMode = 'other';
@@ -822,7 +1105,7 @@ export default function BolsasScreen({
     setMaterials((current) => [...current, next]);
     setSelectedMaterialId(next.id);
     resetDraft(selectedCategory);
-    setStatusMessage(`Material agregado en ${categoryLabel(selectedCategory)}.`);
+    setStatusMessage(`Material agregado en ${categoryLabelForUi(selectedCategory)}.`);
     setStatusType('success');
   }
 
@@ -1005,7 +1288,7 @@ export default function BolsasScreen({
                       <MaterialCommunityIcons name={category.icon} size={18} color={active ? accentTextColor : UI_COLORS.blue} />
                     </View>
                     <Text className="text-center text-sm font-semibold" style={{ color: active ? accentTextColor : theme.text }}>
-                      {category.label}
+                      {categoryLabelForUi(category.key)}
                     </Text>
                   </View>
                 </Pressable>
@@ -1017,7 +1300,7 @@ export default function BolsasScreen({
         <View className="mb-4 rounded-ind border px-3 py-3" style={{ backgroundColor: theme.panelBg, borderColor: accent.border }}>
           <View className="mb-3 flex-row items-center justify-between">
             <Text className="text-sm font-semibold uppercase tracking-[0.2em]" style={{ color: theme.muted }}>Alta de material</Text>
-            <Text className="text-xs" style={{ color: theme.muted }}>{categoryLabel(selectedCategory)}</Text>
+            <Text className="text-xs" style={{ color: theme.muted }}>{categoryLabelForUi(selectedCategory)}</Text>
           </View>
 
           <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Nombre</Text>
@@ -1138,7 +1421,7 @@ export default function BolsasScreen({
           >
             <View className="flex-row items-center justify-center gap-2">
               <Text className="text-center text-sm font-semibold" style={{ color: accentTextColor }} numberOfLines={2}>
-                Agregar material en {categoryLabel(selectedCategory)}
+                Agregar material en {categoryLabelForUi(selectedCategory)}
               </Text>
             </View>
           </Pressable>
@@ -1146,7 +1429,7 @@ export default function BolsasScreen({
 
         {currentMaterials.length === 0 ? (
           <View className="mb-4 rounded-ind border px-4 py-5" style={{ backgroundColor: theme.panelBg, borderColor: accent.border }}>
-            <Text className="text-sm font-medium" style={{ color: theme.text }}>No hay materiales en {categoryLabel(selectedCategory)}.</Text>
+            <Text className="text-sm font-medium" style={{ color: theme.text }}>No hay materiales en {categoryLabelForUi(selectedCategory)}.</Text>
             <Text className="mt-1 text-xs" style={{ color: theme.muted }}>Agrega uno desde la sección superior para comenzar la solicitud.</Text>
           </View>
         ) : null}
@@ -1161,7 +1444,7 @@ export default function BolsasScreen({
             theme={theme}
             onPress={() => setSelectedMaterialId(item.id)}
             categoryIcon={categoryIcon}
-            categoryLabel={categoryLabel}
+            categoryLabel={categoryLabelForUi}
             modeLabel={modeLabel}
             unitLabel={unitLabel}
             getResultLabel={getResultLabel}
@@ -1210,7 +1493,7 @@ export default function BolsasScreen({
             {selectedMaterial ? unitLabel(selectedResultUnit) : 'Selecciona o crea un material'}
           </Text>
           <Text className="mt-2 text-center text-xs text-corporate-muted">
-            {selectedMaterial ? `Categoría activa: ${categoryLabel(selectedMaterial.category)} · ${selectedMaterial.title}` : 'Sin material seleccionado'}
+            {selectedMaterial ? `Categoría activa: ${categoryLabelForUi(selectedMaterial.category)} · ${selectedMaterial.title}` : 'Sin material seleccionado'}
           </Text>
         </View>
 
@@ -1274,7 +1557,7 @@ export default function BolsasScreen({
                       <View className="flex-1 pr-2">
                         <Text className="text-sm font-semibold text-corporate-text">{item.materialTitle}</Text>
                         <Text className="text-[13px] text-corporate-muted">
-                          {categoryLabel(item.category)} · {modeLabel(item.calcMode)}
+                          {categoryLabelForUi(item.category)} · {modeLabel(item.calcMode)}
                         </Text>
                       </View>
                       <Pressable
@@ -1373,6 +1656,60 @@ export default function BolsasScreen({
                     }))
                   }
                   placeholder="Solicitud logística corporativa"
+                  placeholderTextColor={theme.muted}
+                  className="mb-3 rounded-ind border px-3 py-3"
+                  style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }}
+                />
+
+                <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Nombre del botón Bolsas</Text>
+                <TextInput
+                  value={draftPreferences.categoryDisplayNames.bolsas}
+                  onChangeText={(value) =>
+                    setDraftPreferences((current) => ({
+                      ...current,
+                      categoryDisplayNames: {
+                        ...normalizeCategoryDisplayNames(current.categoryDisplayNames),
+                        bolsas: value,
+                      },
+                    }))
+                  }
+                  placeholder="Bolsas"
+                  placeholderTextColor={theme.muted}
+                  className="mb-2 rounded-ind border px-3 py-3"
+                  style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }}
+                />
+
+                <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Nombre del botón Cajas</Text>
+                <TextInput
+                  value={draftPreferences.categoryDisplayNames.cajas}
+                  onChangeText={(value) =>
+                    setDraftPreferences((current) => ({
+                      ...current,
+                      categoryDisplayNames: {
+                        ...normalizeCategoryDisplayNames(current.categoryDisplayNames),
+                        cajas: value,
+                      },
+                    }))
+                  }
+                  placeholder="Cajas"
+                  placeholderTextColor={theme.muted}
+                  className="mb-2 rounded-ind border px-3 py-3"
+                  style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }}
+                />
+
+                <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Nombre del botón Otros</Text>
+                <TextInput
+                  value={draftPreferences.categoryDisplayNames.otros}
+                  onChangeText={(value) =>
+                    setDraftPreferences((current) => ({
+                      ...current,
+                      categoryDisplayNames: {
+                        ...normalizeCategoryDisplayNames(current.categoryDisplayNames),
+                        otros: value,
+                      },
+                    }))
+                  }
+                  placeholder="Otros"
                   placeholderTextColor={theme.muted}
                   className="mb-3 rounded-ind border px-3 py-3"
                   style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }}
@@ -1529,6 +1866,23 @@ export default function BolsasScreen({
                         </Text>
                       </View>
                     </View>
+                  </View>
+
+                  <View className="mb-4 rounded-ind border px-4 py-4" style={{ backgroundColor: theme.panelBg, borderColor: accent.border }}>
+                    <Text className="mb-2 text-[13px] uppercase tracking-[0.22em]" style={{ color: theme.muted }}>Base de materiales</Text>
+                    <Text className="mb-3 text-xs" style={{ color: theme.muted }}>
+                      Importa un archivo Excel o CSV con columnas: categoria, titulo, modo, unidad_solicitud, peso_por_100, unidad_peso.
+                    </Text>
+                    <Pressable
+                      onPress={() => void importMaterialsDatabase()}
+                      hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                      className="rounded-ind border px-3 py-3"
+                      style={{ borderColor: theme.border, backgroundColor: theme.panelAltBg }}
+                    >
+                      <Text className="text-center text-xs font-semibold uppercase tracking-[0.16em]" style={{ color: theme.text }}>
+                        Importar base desde Excel/CSV
+                      </Text>
+                    </Pressable>
                   </View>
 
                   <Text className="mb-2 text-xs" style={{ color: theme.muted }}>Color de acento</Text>

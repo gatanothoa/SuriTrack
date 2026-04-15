@@ -50,6 +50,12 @@ export type TemplateElement =
   | { type: 'text'; content: string }
   | { type: 'field'; name: AvailableField };
 
+export type CategoryDisplayNames = {
+  bolsas: string;
+  cajas: string;
+  otros: string;
+};
+
 export type AppPreferences = {
   appName: string;
   headerSubtitle: string;
@@ -61,6 +67,7 @@ export type AppPreferences = {
   logoSource: string;
   logoLabel: string;
   accentKey: AccentKey;
+  categoryDisplayNames: CategoryDisplayNames;
 };
 
 export type HeaderPreferencesPayload = Pick<AppPreferences, 'appName' | 'headerSubtitle' | 'logoSource' | 'themeMode'>;
