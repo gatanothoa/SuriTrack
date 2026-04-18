@@ -105,3 +105,32 @@ export function calculateRequestedUnit(material: CalculationMaterial): Calculati
 
   return material.requestUnit;
 }
+
+function parseCoordinateValue(value: string) {
+  const normalized = value.replace(',', '.').trim();
+
+  if (!normalized) {
+    return Number.NaN;
+  }
+
+  return Number(normalized);
+}
+
+export function validateGpsCoordinates(latitude: string, longitude: string) {
+  const parsedLatitude = parseCoordinateValue(latitude);
+  const parsedLongitude = parseCoordinateValue(longitude);
+
+  if (!Number.isFinite(parsedLatitude) || !Number.isFinite(parsedLongitude)) {
+    return 'Error';
+  }
+
+  if (parsedLatitude < -90 || parsedLatitude > 90) {
+    return 'Error';
+  }
+
+  if (parsedLongitude < -180 || parsedLongitude > 180) {
+    return 'Error';
+  }
+
+  return 'OK';
+}

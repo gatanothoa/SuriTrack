@@ -1,6 +1,21 @@
-import { calculateRequestedValue, convertWeightUnitToKg } from '../calculations';
+import { calculateRequestedValue, convertWeightUnitToKg, validateGpsCoordinates } from '../calculations';
 
 describe('calculations', () => {
+  it('devuelve Error cuando las coordenadas están vacías', () => {
+    expect(validateGpsCoordinates('', '')).toBe('Error');
+  });
+
+  it('devuelve Error cuando la latitud o longitud son inválidas', () => {
+    expect(validateGpsCoordinates('abc', '-99.13')).toBe('Error');
+    expect(validateGpsCoordinates('91', '-99.13')).toBe('Error');
+    expect(validateGpsCoordinates('19.43', '-181')).toBe('Error');
+  });
+
+  it('devuelve OK cuando las coordenadas son válidas', () => {
+    expect(validateGpsCoordinates('19.4326', '-99.1332')).toBe('OK');
+    expect(validateGpsCoordinates('19,4326', '-99,1332')).toBe('OK');
+  });
+
   it('convierte gramos a kilogramos correctamente', () => {
     expect(convertWeightUnitToKg(2500, 'g')).toBe(2.5);
     expect(convertWeightUnitToKg(1.2, 'kg')).toBe(1.2);
