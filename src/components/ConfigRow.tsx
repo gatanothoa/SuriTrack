@@ -32,7 +32,7 @@ export default function ConfigRow({ item, accent, accentTextColor, theme, onChan
   const displayWeight = convertFromKg(item.weightPer100Kg, item.weightUnit);
 
   return (
-    <View className="mb-3 rounded-ind border px-3 py-3" style={{ backgroundColor: theme.panelBg, borderColor: theme.border }}>
+    <View className="mb-3 rounded-card border px-4 py-4" style={{ backgroundColor: theme.panelBg, borderColor: theme.border }}>
       <View className="mb-3 flex-row items-center justify-between">
         <View className="flex-row items-center gap-2">
           <View className="h-5 w-5 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
@@ -40,8 +40,15 @@ export default function ConfigRow({ item, accent, accentTextColor, theme, onChan
           </View>
           <Text className="text-sm font-semibold" style={{ color: theme.text }}>{item.title || 'Material'}</Text>
         </View>
-        <Pressable onPress={() => onDelete(item.id)} className="rounded-ind border px-3 py-1" style={{ borderColor: accent.border, backgroundColor: theme.panelAltBg }}>
-          <Text className="text-xs font-semibold" style={{ color: theme.text }}>Eliminar</Text>
+        <Pressable
+          onPress={() => onDelete(item.id)}
+          className="rounded-pill border px-3 py-1"
+          style={({ pressed }) => [
+            { borderColor: accent.border, backgroundColor: theme.panelAltBg },
+            pressed ? { opacity: 0.8 } : undefined,
+          ]}
+        >
+          <Text className="text-xs font-semibold tracking-[0.04em]" style={{ color: theme.text }}>Eliminar</Text>
         </Pressable>
       </View>
 

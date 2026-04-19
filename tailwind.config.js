@@ -18,7 +18,9 @@ module.exports = {
         },
       },
       borderRadius: {
-        ind: '6px',
+        ind: '12px',
+        card: '16px',
+        pill: '999px',
       },
     },
   },

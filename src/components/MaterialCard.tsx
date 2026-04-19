@@ -42,7 +42,7 @@ export default function MaterialCard({
   return (
     <Pressable
       onPress={onPress}
-      className="mb-2 rounded-ind border px-3 py-3"
+      className="mb-2 rounded-card border px-4 py-3"
       style={({ pressed }) => [
         { backgroundColor: selected ? theme.panelAltBg : theme.panelBg, borderColor: selected ? accent.border : theme.border },
         pressed ? { opacity: 0.82 } : undefined,
@@ -56,22 +56,22 @@ export default function MaterialCard({
             </View>
             <View className="flex-1">
               <Text className="text-base font-semibold" style={{ color: theme.text }}>{option.title || 'Material sin nombre'}</Text>
-              <Text className="text-[13px] uppercase tracking-[0.16em]" style={{ color: theme.muted }}>{categoryLabel(option.category)}</Text>
+              <Text className="text-[13px] tracking-[0.05em]" style={{ color: theme.muted }}>{categoryLabel(option.category)}</Text>
             </View>
           </View>
 
           <View className="mt-2 flex-row flex-wrap gap-1.5">
-            <View className="rounded-ind border px-2 py-1" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
+            <View className="rounded-pill border px-2 py-1" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
               <Text className="text-[13px] font-medium" style={{ color: theme.muted }}>{modeLabel(option.calcMode)}</Text>
             </View>
-            <View className="rounded-ind border px-2 py-1" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
+            <View className="rounded-pill border px-2 py-1" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
               <Text className="text-[13px] font-medium" style={{ color: theme.muted }}>Unidad: {unitLabel(option.requestUnit)}</Text>
             </View>
           </View>
         </View>
 
         <View className="items-end">
-          <Text className="text-[13px] uppercase tracking-[0.18em]" style={{ color: theme.muted }}>{getResultLabel(option)}</Text>
+          <Text className="text-[13px] tracking-[0.06em]" style={{ color: theme.muted }}>{getResultLabel(option)}</Text>
           <Text className="mt-1 text-2xl font-bold" style={{ color: theme.text }}>
             {formatNumber(resultValue)}
           </Text>

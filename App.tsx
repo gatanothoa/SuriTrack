@@ -27,17 +27,17 @@ const DEFAULT_HEADER_PREFERENCES: HeaderPreferences = {
 function StartupLogo() {
 
   return (
-    <View className="flex-1 items-center justify-center bg-industrial-bg px-6" style={{ backgroundColor: '#1E2329' }}>
-      <RNStatusBar barStyle="light-content" backgroundColor="#1E2329" translucent={false} />
+    <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: '#0B1E3A' }}>
+      <RNStatusBar barStyle="light-content" backgroundColor="#0B1E3A" translucent={false} />
 
       <View className="w-full max-w-[320px] items-center">
-        <View className="items-center rounded-ind border border-industrial-border bg-industrial-surface px-5 py-5">
-          <View className="items-center justify-center rounded-ind border border-industrial-border bg-industrial-bg p-2">
+        <View className="items-center rounded-card border px-5 py-6" style={{ borderColor: '#1F3F73', backgroundColor: '#10284A' }}>
+          <View className="items-center justify-center rounded-card border p-2" style={{ borderColor: '#1F3F73', backgroundColor: '#0B1E3A' }}>
             <Image source={require('./assets/logo.png')} style={{ width: 210, height: 210, borderRadius: 14 }} resizeMode="cover" />
           </View>
 
-          <Text className="mt-4 text-[13px] font-semibold tracking-[0.35em] text-industrial-primary">SURTITRACK</Text>
-          <Text className="mt-3 text-sm font-medium text-industrial-text">Operación logística</Text>
+          <Text className="mt-4 text-[13px] font-semibold tracking-[0.18em]" style={{ color: '#A9C4EA' }}>SURTITRACK</Text>
+          <Text className="mt-2 text-sm font-medium" style={{ color: '#EAF2FF' }}>Operación logística</Text>
         </View>
       </View>
     </View>
@@ -119,8 +119,8 @@ export default function App() {
   if (!ready) {
     return (
       <SafeAreaProvider>
-        <SafeAreaView className="flex-1 bg-industrial-bg" style={{ backgroundColor: '#1E2329' }}>
-          <StatusBar style="light" backgroundColor="#1E2329" translucent={false} />
+        <SafeAreaView className="flex-1" style={{ backgroundColor: '#0B1E3A' }}>
+          <StatusBar style="light" backgroundColor="#0B1E3A" translucent={false} />
           <StartupLogo />
         </SafeAreaView>
       </SafeAreaProvider>
@@ -129,15 +129,15 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-        <SafeAreaView className="flex-1 bg-industrial-bg" style={{ backgroundColor: appBackground }}>
+        <SafeAreaView className="flex-1" style={{ backgroundColor: appBackground }}>
           <StatusBar style={isLightMode ? 'dark' : 'light'} backgroundColor={appBackground} translucent={false} />
 
-          <View className="flex-1 bg-industrial-bg" style={{ backgroundColor: appBackground }}>
-          <View className="border-b border-industrial-border bg-industrial-surface px-4 py-4" style={{ backgroundColor: appSurface, borderBottomColor: appBorder }}>
+          <View className="flex-1" style={{ backgroundColor: appBackground }}>
+          <View className="border-b px-4 py-4" style={{ backgroundColor: appSurface, borderBottomColor: appBorder }}>
             <View className="flex-row items-center gap-3">
-              <View className="items-center justify-center rounded-ind border border-industrial-border bg-industrial-bg px-3 py-3" style={{ borderColor: appBorder, backgroundColor: appBackground }}>
+              <View className="items-center justify-center rounded-ind border px-3 py-3" style={{ borderColor: appBorder, backgroundColor: appBackground }}>
                 {headerPreferences.logoSource ? (
-                  <Image source={{ uri: headerPreferences.logoSource }} style={{ width: 24, height: 24, borderRadius: 6 }} resizeMode="cover" />
+                  <Image source={{ uri: headerPreferences.logoSource }} style={{ width: 24, height: 24, borderRadius: 10 }} resizeMode="cover" />
                 ) : (
                   <MaterialCommunityIcons name="clipboard-text-outline" size={22} color="#FFB020" />
                 )}
