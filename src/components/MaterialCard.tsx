@@ -42,7 +42,7 @@ export default function MaterialCard({
   return (
     <Pressable
       onPress={onPress}
-      className="mb-2 rounded-card border px-4 py-3"
+      className="mb-3 rounded-2xl border px-4 py-4 shadow-sm"
       style={({ pressed }) => [
         { backgroundColor: selected ? theme.panelAltBg : theme.panelBg, borderColor: selected ? accent.border : theme.border },
         pressed ? { opacity: 0.82 } : undefined,
@@ -51,7 +51,7 @@ export default function MaterialCard({
       <View className="flex-row items-start justify-between gap-4">
         <View className="flex-1">
           <View className="flex-row items-center gap-2">
-            <View className="items-center justify-center rounded-ind border px-2 py-2" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
+            <View className="items-center justify-center rounded-xl border px-2 py-2" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
               <MaterialCommunityIcons name={categoryIcon(option.category)} size={18} color={selected ? accentTextColor : accent.color} />
             </View>
             <View className="flex-1">
@@ -61,10 +61,10 @@ export default function MaterialCard({
           </View>
 
           <View className="mt-2 flex-row flex-wrap gap-1.5">
-            <View className="rounded-pill border px-2 py-1" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
+            <View className="rounded-pill border px-2.5 py-1" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
               <Text className="text-[13px] font-medium" style={{ color: theme.muted }}>{modeLabel(option.calcMode)}</Text>
             </View>
-            <View className="rounded-pill border px-2 py-1" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
+            <View className="rounded-pill border px-2.5 py-1" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
               <Text className="text-[13px] font-medium" style={{ color: theme.muted }}>Unidad: {unitLabel(option.requestUnit)}</Text>
             </View>
           </View>

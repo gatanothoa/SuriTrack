@@ -47,7 +47,7 @@ describe('logisticsService', () => {
     jest.clearAllMocks();
   });
 
-  it('genera CSV limpio con BOM, separador punto y coma y solo datos de la solicitud', async () => {
+  it('genera correo profesional con solo folio, material, cantidad a surtir y fecha', async () => {
     const result = await sendLogisticsEmail({
       recipientEmail: 'logistica@empresa.com',
       requestCode: 'CS001',
@@ -91,15 +91,25 @@ describe('logisticsService', () => {
     expect(result.reserveFolio).toBe(true);
 
     const writeMock = FileSystem.writeAsStringAsync as jest.Mock;
-    expect(writeMock).toHaveBeenCalled();
+    expect(writeMock).not.toHaveBeenCalled();
 
-    const csvPayload = String(writeMock.mock.calls[0][1]);
-    expect(csvPayload.startsWith('\uFEFF')).toBe(true);
-    expect(csvPayload).toContain('"FOLIO";"CATEGORIA";"DESCRIPCION";"MODO";"CANTIDAD SOLICITADA";"UNIDAD SOLICITADA";"PESO CALCULADO";"UNIDAD RESULTADO";"FECHA REGISTRO"');
-    expect(csvPayload).toContain('"CS001";"Cajas";"Caja corrugada";"Piezas";"12";"piezas";"12";"piezas";"');
-    expect(csvPayload).not.toContain('EMPRESA');
-    expect(csvPayload).not.toContain('SUBTITULO');
-    expect(csvPayload).not.toContain('NOTA');
+    const composeMock = MailComposer.composeAsync as jest.Mock;
+    expect(composeMock).toHaveBeenCalled();
+
+    const composePayload = composeMock.mock.calls[0][0];
+    expect(composePayload.isHtml).toBe(true);
+    expect(composePayload.attachments).toBeUndefined();
+
+    const htmlBody = String(composePayload.body);
+    expect(htmlBody).toContain('Folio CS001');
+    expect(htmlBody).toContain('Tipo de material');
+    expect(htmlBody).toContain('Cantidad a surtir');
+    expect(htmlBody).toContain('Fecha');
+    expect(htmlBody).toContain('Cajas - Caja corrugada');
+    expect(htmlBody).toContain('12 piezas');
+    expect(htmlBody).not.toContain('Total de materiales');
+    expect(htmlBody).not.toContain('Total de piezas');
+    expect(htmlBody).not.toContain('Total de kilos a surtir');
 
     expect((MailComposer.composeAsync as jest.Mock)).toHaveBeenCalled();
   });

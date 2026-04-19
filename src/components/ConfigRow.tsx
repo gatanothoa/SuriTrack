@@ -32,7 +32,7 @@ export default function ConfigRow({ item, accent, accentTextColor, theme, onChan
   const displayWeight = convertFromKg(item.weightPer100Kg, item.weightUnit);
 
   return (
-    <View className="mb-3 rounded-card border px-4 py-4" style={{ backgroundColor: theme.panelBg, borderColor: theme.border }}>
+    <View className="mb-3 rounded-2xl border px-4 py-4 shadow-sm" style={{ backgroundColor: theme.panelBg, borderColor: theme.border }}>
       <View className="mb-3 flex-row items-center justify-between">
         <View className="flex-row items-center gap-2">
           <View className="h-5 w-5 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
@@ -42,7 +42,7 @@ export default function ConfigRow({ item, accent, accentTextColor, theme, onChan
         </View>
         <Pressable
           onPress={() => onDelete(item.id)}
-          className="rounded-pill border px-3 py-1"
+          className="min-h-[44px] items-center justify-center rounded-pill border px-3 py-1"
           style={({ pressed }) => [
             { borderColor: accent.border, backgroundColor: theme.panelAltBg },
             pressed ? { opacity: 0.8 } : undefined,
@@ -58,7 +58,7 @@ export default function ConfigRow({ item, accent, accentTextColor, theme, onChan
         onChangeText={(value) => onChange(item.id, { title: value })}
         placeholder="Nombre del material"
         placeholderTextColor={theme.muted}
-        className="mb-3 rounded-ind border px-3 py-3"
+        className="mb-3 rounded-xl border px-3 py-3"
         style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }}
       />
 
@@ -68,14 +68,14 @@ export default function ConfigRow({ item, accent, accentTextColor, theme, onChan
           <View className="mb-3 flex-row gap-2">
             <Pressable
               onPress={() => onChange(item.id, { weightUnit: 'g' })}
-              className="flex-1 rounded-ind border px-3 py-3"
+              className="flex-1 min-h-[44px] items-center justify-center rounded-xl border px-3 py-3"
               style={item.weightUnit === 'g' ? { backgroundColor: accent.color, borderColor: accent.border } : { backgroundColor: theme.panelAltBg, borderColor: theme.border }}
             >
               <Text className="text-center text-sm font-semibold" style={{ color: item.weightUnit === 'g' ? accentTextColor : theme.muted }}>Gramos</Text>
             </Pressable>
             <Pressable
               onPress={() => onChange(item.id, { weightUnit: 'kg' })}
-              className="flex-1 rounded-ind border px-3 py-3"
+              className="flex-1 min-h-[44px] items-center justify-center rounded-xl border px-3 py-3"
               style={item.weightUnit === 'kg' ? { backgroundColor: accent.color, borderColor: accent.border } : { backgroundColor: theme.panelAltBg, borderColor: theme.border }}
             >
               <Text className="text-center text-sm font-semibold" style={{ color: item.weightUnit === 'kg' ? accentTextColor : theme.muted }}>Kilogramos</Text>
@@ -92,7 +92,7 @@ export default function ConfigRow({ item, accent, accentTextColor, theme, onChan
             keyboardType="decimal-pad"
             placeholder={item.weightUnit === 'g' ? 'Ej. 450' : 'Ej. 0.450'}
             placeholderTextColor={theme.muted}
-            className="rounded-ind border px-3 py-3"
+            className="rounded-xl border px-3 py-3"
             style={{
               backgroundColor: invalidWeight ? WARNING_COLORS.bg : theme.inputBg,
               borderColor: invalidWeight ? WARNING_COLORS.border : theme.inputBorder,
@@ -113,7 +113,7 @@ export default function ConfigRow({ item, accent, accentTextColor, theme, onChan
                 <Pressable
                   key={unit}
                   onPress={() => onChange(item.id, { requestUnit: unit })}
-                  className="flex-1 rounded-ind border px-3 py-3"
+                  className="flex-1 min-h-[44px] items-center justify-center rounded-xl border px-3 py-3"
                   style={active ? { backgroundColor: accent.color, borderColor: accent.border } : { backgroundColor: theme.panelAltBg, borderColor: theme.border }}
                 >
                   <Text className="text-center text-sm font-semibold" style={{ color: active ? accentTextColor : theme.muted }}>{unitLabel(unit)}</Text>
@@ -125,7 +125,7 @@ export default function ConfigRow({ item, accent, accentTextColor, theme, onChan
       ) : null}
 
       {item.calcMode === 'pieces' ? (
-        <View className="mt-1 rounded-ind border px-3 py-2" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
+        <View className="mt-1 rounded-xl border px-3 py-2" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
           <Text className="text-xs" style={{ color: theme.muted }}>Se solicitará por piezas.</Text>
         </View>
       ) : null}

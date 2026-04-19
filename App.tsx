@@ -48,11 +48,11 @@ export default function App() {
   const [ready, setReady] = useState(false);
   const [headerPreferences, setHeaderPreferences] = useState<HeaderPreferences>(DEFAULT_HEADER_PREFERENCES);
   const isLightMode = headerPreferences.themeMode === 'light';
-  const appBackground = isLightMode ? '#DCE5EF' : '#1E2329';
-  const appSurface = isLightMode ? '#EDF2F7' : '#232A31';
-  const appBorder = isLightMode ? '#A9B8C8' : '#3A434D';
+  const appBackground = isLightMode ? '#F2F7FD' : '#081A33';
+  const appSurface = isLightMode ? '#FFFFFF' : '#0E2748';
+  const appBorder = isLightMode ? '#D7E4F5' : '#23456F';
   const appText = isLightMode ? '#1F2937' : '#FFFFFF';
-  const appSubText = isLightMode ? '#4B5563' : '#94A3B8';
+  const appSubText = isLightMode ? '#4E6B94' : '#A9C4EA';
 
   const handleHeaderPreferencesChange = useCallback((nextPreferences: HeaderPreferences) => {
     setHeaderPreferences((current) => {
@@ -135,7 +135,7 @@ export default function App() {
           <View className="flex-1" style={{ backgroundColor: appBackground }}>
           <View className="border-b px-4 py-4" style={{ backgroundColor: appSurface, borderBottomColor: appBorder }}>
             <View className="flex-row items-center gap-3">
-              <View className="items-center justify-center rounded-ind border px-3 py-3" style={{ borderColor: appBorder, backgroundColor: appBackground }}>
+              <View className="items-center justify-center rounded-xl border px-3 py-3" style={{ borderColor: appBorder, backgroundColor: appBackground }}>
                 {headerPreferences.logoSource ? (
                   <Image source={{ uri: headerPreferences.logoSource }} style={{ width: 24, height: 24, borderRadius: 10 }} resizeMode="cover" />
                 ) : (
