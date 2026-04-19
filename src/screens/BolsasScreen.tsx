@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Animated,
   Alert,
   Image,
   Platform,
@@ -197,10 +198,6 @@ function sanitizeFolioPrefix(prefix: string) {
   return normalizeFolioPrefixInput(prefix) || FOLIO_PREFIX_FALLBACK;
 }
 
-function getReadableButtonTextColor() {
-  return UI_COLORS.white;
-}
-
 function getAccessibleTextColorForAccent(hexColor: string) {
   const sanitized = hexColor.replace('#', '');
 
@@ -229,7 +226,7 @@ function getGreetingByHour(date: Date) {
   const hour = date.getHours();
 
   if (hour < 12) {
-    return 'Buenos dias equipo,';
+    return 'Buenos días equipo,';
   }
 
   if (hour < 19) {
@@ -389,7 +386,7 @@ function parseImportedMaterials(
     const category = parseCategoryValue(categoryRaw);
 
     if (!category) {
-      errors.push(`Fila ${rowNumber}: categoria inválida (${categoryRaw || 'vacía'}). Usa bolsas, cajas u otros.`);
+      errors.push(`Fila ${rowNumber}: categoría inválida (${categoryRaw || 'vacía'}). Usa bolsas, cajas u otros.`);
       return;
     }
 
@@ -509,9 +506,12 @@ export default function BolsasScreen({
   const [draftPreferences, setDraftPreferences] = useState<AppPreferences>(DEFAULT_PREFERENCES);
   const [templateElements, setTemplateElements] = useState<TemplateElement[]>([]);
   const [draftTemplateElements, setDraftTemplateElements] = useState<TemplateElement[]>([]);
+  const sectionAnimations = useRef(Array.from({ length: 4 }, () => new Animated.Value(0))).current;
+  const categorySectionAnimation = useRef(new Animated.Value(1)).current;
+  const settingsPanelAnimation = useRef(new Animated.Value(0)).current;
+  const [renderSettingsPanel, setRenderSettingsPanel] = useState(false);
   const accent = ACCENT_PRESETS[preferences.accentKey] ?? ACCENT_PRESETS[DEFAULT_PREFERENCES.accentKey];
   const isDarkTheme = draftPreferences.themeMode === 'dark';
-  const buttonTextColor = isDarkTheme ? UI_COLORS.white : UI_COLORS.text;
   const accentTextColor = getAccessibleTextColorForAccent(accent.color);
   const theme = {
     pageBg: isDarkTheme ? UI_COLORS.darkBackground : UI_COLORS.background,
@@ -728,10 +728,10 @@ export default function BolsasScreen({
           setDraftTemplateElements(elements);
         }
 
-        setStatusMessage('Configuracion cargada');
+        setStatusMessage('Configuración cargada');
         setStatusType('success');
       } catch {
-        setStatusMessage('No se pudo cargar la configuracion guardada.');
+        setStatusMessage('No se pudo cargar la configuración guardada.');
         setStatusType('error');
       } finally {
         if (isMounted) {
@@ -842,6 +842,102 @@ export default function BolsasScreen({
   }, [cartItems, isLoading, materials, nextLeadNumber, preferences, recipientEmail, selectedCategory, selectedMaterialId]);
 
   const templateEditorValue = useMemo(() => templateElementsToString(draftTemplateElements), [draftTemplateElements]);
+
+  const getSectionEntryStyle = (index: number) => ({
+    opacity: sectionAnimations[index].interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, 1],
+    }),
+    transform: [
+      {
+        translateY: sectionAnimations[index].interpolate({
+          inputRange: [0, 1],
+          outputRange: [14, 0],
+        }),
+      },
+    ],
+  });
+
+  const getCategoryTransitionStyle = () => ({
+    opacity: categorySectionAnimation,
+    transform: [
+      {
+        translateY: categorySectionAnimation.interpolate({
+          inputRange: [0, 1],
+          outputRange: [10, 0],
+        }),
+      },
+    ],
+  });
+
+  const getSettingsPanelStyle = () => ({
+    opacity: settingsPanelAnimation,
+    maxHeight: settingsPanelAnimation.interpolate({
+      inputRange: [0, 1],
+      outputRange: [0, 6000],
+    }),
+    transform: [
+      {
+        translateY: settingsPanelAnimation.interpolate({
+          inputRange: [0, 1],
+          outputRange: [-8, 0],
+        }),
+      },
+    ],
+  });
+
+  useEffect(() => {
+    if (isLoading) {
+      return;
+    }
+
+    sectionAnimations.forEach((animation) => animation.setValue(0));
+
+    const staggered = Animated.stagger(
+      80,
+      sectionAnimations.map((animation) =>
+        Animated.timing(animation, {
+          toValue: 1,
+          duration: 240,
+          useNativeDriver: false,
+        })
+      )
+    );
+
+    staggered.start();
+  }, [isLoading, sectionAnimations]);
+
+  useEffect(() => {
+    categorySectionAnimation.setValue(0);
+
+    Animated.timing(categorySectionAnimation, {
+      toValue: 1,
+      duration: 180,
+      useNativeDriver: false,
+    }).start();
+  }, [categorySectionAnimation, selectedCategory]);
+
+  useEffect(() => {
+    if (settingsOpen) {
+      setRenderSettingsPanel(true);
+      Animated.timing(settingsPanelAnimation, {
+        toValue: 1,
+        duration: 220,
+        useNativeDriver: false,
+      }).start();
+      return;
+    }
+
+    Animated.timing(settingsPanelAnimation, {
+      toValue: 0,
+      duration: 180,
+      useNativeDriver: false,
+    }).start(({ finished }) => {
+      if (finished) {
+        setRenderSettingsPanel(false);
+      }
+    });
+  }, [settingsOpen, settingsPanelAnimation]);
 
   function updateTemplateFromText(value: string) {
     setDraftTemplateElements(stringToTemplateElements(value));
@@ -1088,7 +1184,7 @@ export default function BolsasScreen({
       const normalizedWeightKg = convertToKg(parsedWeight, draft.weightUnit);
 
       if (!isNonEmptyPositive(normalizedWeightKg)) {
-        setStatusMessage('Ingresa un peso valido para 100 piezas antes de agregar.');
+        setStatusMessage('Ingresa un peso válido para 100 piezas antes de agregar.');
         setStatusType('error');
         return;
       }
@@ -1143,7 +1239,7 @@ export default function BolsasScreen({
 
   function addToRequest() {
     if (!selectedMaterial) {
-      setStatusMessage('Agrega un material en la categoria actual.');
+      setStatusMessage('Agrega un material en la categoría actual.');
       setStatusType('error');
       return;
     }
@@ -1151,7 +1247,7 @@ export default function BolsasScreen({
     const requestValue = selectedMaterial.requestValue;
 
     if (!isNonEmptyPositive(requestValue)) {
-      setStatusMessage('Captura una cantidad valida antes de agregar a la solicitud.');
+      setStatusMessage('Captura una cantidad válida antes de agregar a la solicitud.');
       setStatusType('error');
       return;
     }
@@ -1208,13 +1304,13 @@ export default function BolsasScreen({
     }
 
     if (!isValidEmail(recipientEmail)) {
-      setStatusMessage('El correo destino no tiene un formato valido.');
+      setStatusMessage('El correo destino no tiene un formato válido.');
       setStatusType('error');
       return;
     }
 
     if (cartItems.length === 0) {
-      setStatusMessage('El resumen esta vacio. Agrega al menos un material.');
+      setStatusMessage('El resumen está vacío. Agrega al menos un material.');
       setStatusType('error');
       return;
     }
@@ -1273,7 +1369,7 @@ export default function BolsasScreen({
           ) : null}
         </View>
 
-        <View className="mb-4 rounded-ind border px-4 py-4" style={{ backgroundColor: theme.panelBg, borderColor: accent.border }}>
+        <Animated.View className="mb-4 rounded-ind border px-4 py-4" style={[{ backgroundColor: theme.panelBg, borderColor: accent.border }, getSectionEntryStyle(0)]}>
           <View className="flex-row items-center justify-between">
             <View className="flex-1 pr-3">
               <Text className="text-[13px] uppercase tracking-[0.14em]" style={{ color: theme.muted }}>{preferences.appName}</Text>
@@ -1290,9 +1386,9 @@ export default function BolsasScreen({
           <Text className="mt-2 text-sm" style={{ color: theme.muted }}>
             {preferences.emailNote}
           </Text>
-        </View>
+        </Animated.View>
 
-        <View className="mb-4 rounded-card border px-3 py-3" style={{ backgroundColor: theme.panelBg, borderColor: accent.border }}>
+        <Animated.View className="mb-4 rounded-card border px-3 py-3" style={[{ backgroundColor: theme.panelBg, borderColor: accent.border }, getSectionEntryStyle(0)]}>
           <View className="flex-row gap-2">
             <View className="flex-1 rounded-ind border px-3 py-2" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
               <Text className="text-[11px] tracking-[0.05em]" style={{ color: theme.muted }}>Catálogo activo</Text>
@@ -1310,8 +1406,9 @@ export default function BolsasScreen({
               <Text className="text-xs" style={{ color: theme.muted }}>Acumulado</Text>
             </View>
           </View>
-        </View>
+        </Animated.View>
 
+        <Animated.View style={getCategoryTransitionStyle()}>
         <View className="mb-3">
           <Text className="mb-2 text-sm font-semibold tracking-[0.06em]" style={{ color: theme.muted }}>Tipo de material</Text>
           <View className="flex-row gap-2">
@@ -1324,7 +1421,10 @@ export default function BolsasScreen({
                   onPress={() => setSelectedCategory(category.key)}
                   hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                   className="flex-1 rounded-ind border px-3 py-3"
-                  style={active ? { borderColor: accent.border, backgroundColor: accent.color } : { borderColor: theme.border, backgroundColor: theme.panelAltBg }}
+                  style={({ pressed }) => [
+                    active ? { borderColor: accent.border, backgroundColor: accent.color } : { borderColor: theme.border, backgroundColor: theme.panelAltBg },
+                    pressed ? { transform: [{ scale: 0.98 }] } : undefined,
+                  ]}
                 >
                   <View className="items-center gap-2">
                     <View className="h-6 w-6 items-center justify-center rounded border" style={{ borderColor: active ? accentTextColor : theme.border }}>
@@ -1556,8 +1656,9 @@ export default function BolsasScreen({
             <Text className="text-center text-sm font-bold" style={{ color: accentTextColor }}>Agregar a la solicitud</Text>
           </View>
         </Pressable>
+        </Animated.View>
 
-        <View className="mt-6">
+        <Animated.View className="mt-6" style={getSectionEntryStyle(2)}>
           <View className="mb-3 flex-row items-center justify-between">
             <View className="flex-row items-center gap-2">
               <View className="h-5 w-5 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
@@ -1669,9 +1770,9 @@ export default function BolsasScreen({
               </Pressable>
             </View>
           </View>
-        </View>
+        </Animated.View>
 
-        <View className="mt-4 rounded-ind border px-4 py-4" style={{ backgroundColor: theme.panelBg, borderColor: accent.border }}>
+        <Animated.View className="mt-4 rounded-ind border px-4 py-4" style={[{ backgroundColor: theme.panelBg, borderColor: accent.border }, getSectionEntryStyle(3)]}>
           <Pressable onPress={() => setSettingsOpen((current) => !current)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-2">
               <View className="h-5 w-5 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
@@ -1682,8 +1783,8 @@ export default function BolsasScreen({
             <Text className="text-base font-bold" style={{ color: theme.muted }}>{settingsOpen ? '˄' : '˅'}</Text>
           </Pressable>
 
-          {settingsOpen ? (
-            <View className="mt-4">
+          {renderSettingsPanel ? (
+            <Animated.View className="mt-4 overflow-hidden" style={getSettingsPanelStyle()}>
               <View className="mb-4 rounded-ind border px-4 py-4" style={{ backgroundColor: theme.panelBg, borderColor: accent.border }}>
                 <View className="mb-3 flex-row items-center gap-2">
                   <View className="h-4 w-4 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
@@ -2021,9 +2122,9 @@ export default function BolsasScreen({
                   unitLabel={unitLabel}
                 />
               ))}
-            </View>
+            </Animated.View>
           ) : null}
-        </View>
+        </Animated.View>
       </View>
       </ScrollView>
     </KeyboardAvoidingView>
