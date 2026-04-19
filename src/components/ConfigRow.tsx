@@ -126,7 +126,7 @@ export default function ConfigRow({ item, accent, accentTextColor, theme, onChan
 
       {item.calcMode === 'pieces' ? (
         <View className="mt-1 rounded-ind border px-3 py-2" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
-          <Text className="text-xs" style={{ color: theme.muted }}>Se solicitara por piezas.</Text>
+          <Text className="text-xs" style={{ color: theme.muted }}>Se solicitará por piezas.</Text>
         </View>
       ) : null}
     </View>

@@ -144,7 +144,7 @@ export default function App() {
               </View>
               <View>
                 <Text className="text-lg font-bold text-white" style={{ color: appText }}>{headerPreferences.appName}</Text>
-                <Text className="text-sm text-slate-400" style={{ color: appSubText }}>{headerPreferences.appName} · {headerPreferences.headerSubtitle}</Text>
+                <Text className="text-sm text-slate-400" style={{ color: appSubText }}>{headerPreferences.headerSubtitle}</Text>
               </View>
             </View>
           </View>
