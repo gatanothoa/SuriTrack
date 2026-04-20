@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
+import * as Sharing from 'expo-sharing';
 import * as XLSX from 'xlsx';
 import {
   calculateRequestedUnit,
@@ -30,6 +31,7 @@ import {
 import MaterialCard from '../components/MaterialCard';
 import ConfigRow from '../components/ConfigRow';
 import { persistLogoLocally, sendLogisticsEmail, stringToTemplateElements, templateElementsToString } from '../services/logisticsService';
+import { createBackupFile, readBackupFile } from '../services/backupService';
 import type {
   TemplateElement,
   AppPreferences,
@@ -80,12 +82,13 @@ const DEFAULT_PREFERENCES: AppPreferences = {
   emailTemplate: [
     '{logo}',
     '{greeting}',
-    'Comparto la solicitud de material auxiliar.',
     '',
     'Folio: {folio}',
-    'Total de materiales: {totalMaterials}',
-    'Total de piezas: {totalPieces}',
-    'Total de kilos a surtir: {totalKg} kg',
+    '',
+    '{materialTable}',
+    '',
+    'Total a surtir: {totalKg}',
+    'Fecha: {requestDate}',
     '',
     '{attachmentNote}',
     '',
@@ -101,6 +104,7 @@ const DEFAULT_PREFERENCES: AppPreferences = {
 };
 
 const STORAGE_KEY = 'calcpack.materials.config.v5';
+const BACKUP_META_KEY = 'calcpack.materials.backup.meta.v1';
 const LEGACY_STORAGE_KEYS = [
   'calcpack.materials.config.v4',
   'calcpack.materials.config.v3',
@@ -529,6 +533,13 @@ export default function BolsasScreen({
     cajas: { title: '', weightInput: '', weightUnit: 'kg', otherUnit: 'kg' },
     otros: { title: '', weightInput: '', weightUnit: 'kg', otherUnit: 'kg' },
   });
+  const [runtimeLogoSource, setRuntimeLogoSource] = useState('');
+  const [isCreatingBackup, setIsCreatingBackup] = useState(false);
+  const [isRestoringBackup, setIsRestoringBackup] = useState(false);
+  const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
+  const effectiveHeaderLogoSource = draftPreferences.logoSource || runtimeLogoSource;
+  const effectiveSavedLogoSource = preferences.logoSource || runtimeLogoSource;
+  const effectiveDraftLogoPreviewSource = draftPreferences.logoSource || runtimeLogoSource;
 
   useEffect(() => {
     if (!statusMessage) {
@@ -555,10 +566,10 @@ export default function BolsasScreen({
     onHeaderPreferencesChange?.({
       appName: draftPreferences.appName,
       headerSubtitle: draftPreferences.headerSubtitle,
-      logoSource: draftPreferences.logoSource,
+      logoSource: effectiveHeaderLogoSource,
       themeMode: draftPreferences.themeMode,
     });
-  }, [draftPreferences.appName, draftPreferences.headerSubtitle, draftPreferences.logoSource, draftPreferences.themeMode, isLoading, onHeaderPreferencesChange]);
+  }, [draftPreferences.appName, draftPreferences.headerSubtitle, draftPreferences.themeMode, effectiveHeaderLogoSource, isLoading, onHeaderPreferencesChange]);
 
   useEffect(() => {
     let isMounted = true;
@@ -672,6 +683,8 @@ export default function BolsasScreen({
           if (!logoSourceToUse && typeof parsed.preferences.logoSource === 'string' && parsed.preferences.logoSource.trim()) {
             logoSourceToUse = parsed.preferences.logoSource.trim();
           }
+
+          const persistableLogoSource = Platform.OS === 'web' && logoSourceToUse.startsWith('data:image/') ? '' : logoSourceToUse;
           
           const nextPreferences: AppPreferences = {
             appName:
@@ -699,7 +712,7 @@ export default function BolsasScreen({
               typeof parsed.preferences.sheetNote === 'string' && parsed.preferences.sheetNote.trim()
                 ? parsed.preferences.sheetNote.trim()
                 : DEFAULT_PREFERENCES.sheetNote,
-            logoSource: logoSourceToUse,
+            logoSource: persistableLogoSource,
             logoLabel:
               typeof parsed.preferences.logoLabel === 'string' && parsed.preferences.logoLabel.trim()
                 ? parsed.preferences.logoLabel.trim()
@@ -708,12 +721,13 @@ export default function BolsasScreen({
             categoryDisplayNames: normalizeCategoryDisplayNames(parsed.preferences.categoryDisplayNames),
           };
 
+          setRuntimeLogoSource(logoSourceToUse);
           setPreferences(nextPreferences);
           setDraftPreferences(nextPreferences);
           onHeaderPreferencesChange?.({
             appName: nextPreferences.appName,
             headerSubtitle: nextPreferences.headerSubtitle,
-            logoSource: nextPreferences.logoSource,
+            logoSource: logoSourceToUse,
             themeMode: nextPreferences.themeMode,
           });
           
@@ -740,6 +754,34 @@ export default function BolsasScreen({
 
     return () => {
       isMounted = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadBackupMeta() {
+      try {
+        const stored = await AsyncStorage.getItem(BACKUP_META_KEY);
+
+        if (!mounted || !stored) {
+          return;
+        }
+
+        const parsed = JSON.parse(stored) as { lastBackupAt?: string };
+
+        if (typeof parsed.lastBackupAt === 'string' && parsed.lastBackupAt.trim()) {
+          setLastBackupAt(parsed.lastBackupAt);
+        }
+      } catch {
+        // Si falla la lectura del metadata, no se bloquea la app.
+      }
+    }
+
+    void loadBackupMeta();
+
+    return () => {
+      mounted = false;
     };
   }, []);
 
@@ -941,6 +983,9 @@ export default function BolsasScreen({
 
   async function savePreferences() {
     const persistedLogo = await persistLogoLocally(draftPreferences.logoSource, draftPreferences.logoLabel, DEFAULT_PREFERENCES.logoLabel);
+    const persistableLogoSource = Platform.OS === 'web' && persistedLogo.logoSource.startsWith('data:image/')
+      ? ''
+      : persistedLogo.logoSource;
 
     const nextPreferences: AppPreferences = {
       appName: normalizePreferenceText(draftPreferences.appName, DEFAULT_PREFERENCES.appName),
@@ -951,14 +996,13 @@ export default function BolsasScreen({
       emailNote: normalizePreferenceText(draftPreferences.emailNote, DEFAULT_PREFERENCES.emailNote),
       sheetNote: normalizePreferenceText(draftPreferences.sheetNote, DEFAULT_PREFERENCES.sheetNote),
       // En web, NO guardar data URI completo en AsyncStorage (es muy grande); se guarda en sessionStorage
-      logoSource: Platform.OS === 'web' && persistedLogo.logoSource.startsWith('data:image/') 
-        ? '' 
-        : persistedLogo.logoSource,
+      logoSource: persistableLogoSource,
       logoLabel: normalizePreferenceText(persistedLogo.logoLabel, DEFAULT_PREFERENCES.logoLabel),
       accentKey: DEFAULT_PREFERENCES.accentKey,
       categoryDisplayNames: normalizeCategoryDisplayNames(draftPreferences.categoryDisplayNames),
     };
 
+    setRuntimeLogoSource(persistedLogo.logoSource);
     setPreferences(nextPreferences);
     setDraftPreferences(nextPreferences);
     setTemplateElements(draftTemplateElements);
@@ -1292,6 +1336,147 @@ export default function BolsasScreen({
     ]);
   }
 
+  async function shareBackupFile(fileUri: string, fileName: string) {
+    if (Platform.OS === 'web') {
+      const jsonContent = await FileSystem.readAsStringAsync(fileUri, {
+        encoding: FileSystem.EncodingType.UTF8,
+      });
+
+      const blob = new Blob([jsonContent], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = fileName;
+      anchor.click();
+      URL.revokeObjectURL(url);
+      return;
+    }
+
+    const canShare = await Sharing.isAvailableAsync();
+
+    if (!canShare) {
+      throw new Error('No se encontró un método para compartir el respaldo en este dispositivo.');
+    }
+
+    await Sharing.shareAsync(fileUri, {
+      mimeType: 'application/json',
+      dialogTitle: 'Respaldar SurtiTrack',
+      UTI: 'public.json',
+    });
+  }
+
+  function buildStoredConfigSnapshot(): StoredConfig {
+    return {
+      selectedCategory,
+      selectedMaterialId,
+      recipientEmail,
+      materials,
+      cartItems,
+      nextLeadNumber,
+      preferences: {
+        ...preferences,
+        logoSource: effectiveSavedLogoSource,
+      },
+    };
+  }
+
+  async function createCloudBackup() {
+    try {
+      setIsCreatingBackup(true);
+      const snapshot = buildStoredConfigSnapshot();
+      const backup = await createBackupFile(snapshot);
+      await shareBackupFile(backup.fileUri, backup.fileName);
+
+      setLastBackupAt(backup.exportedAt);
+      await AsyncStorage.setItem(BACKUP_META_KEY, JSON.stringify({ lastBackupAt: backup.exportedAt }));
+
+      setStatusMessage('Respaldo generado. Súbelo a Drive, OneDrive o iCloud desde el menú compartir.');
+      setStatusType('success');
+    } catch (error) {
+      const message = error instanceof Error && error.message ? error.message : 'No se pudo generar el respaldo.';
+      setStatusMessage(message);
+      setStatusType('error');
+    } finally {
+      setIsCreatingBackup(false);
+    }
+  }
+
+  async function restoreFromBackup() {
+    try {
+      setIsRestoringBackup(true);
+
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/json', 'text/json'],
+        multiple: false,
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled || !result.assets.length) {
+        return;
+      }
+
+      const asset = result.assets[0];
+      const parsed = await readBackupFile(asset.uri);
+      const restored = parsed.config;
+      const logoSourceToUse = typeof restored.preferences.logoSource === 'string' ? restored.preferences.logoSource.trim() : '';
+      const persistableLogoSource = Platform.OS === 'web' && logoSourceToUse.startsWith('data:image/') ? '' : logoSourceToUse;
+
+      if (Platform.OS === 'web' && logoSourceToUse.startsWith('data:image/') && typeof sessionStorage !== 'undefined') {
+        try {
+          sessionStorage.setItem('calcpack.logo.datauri', logoSourceToUse);
+        } catch {
+          // Si falla sessionStorage, no se bloquea la restauración.
+        }
+      }
+
+      const normalizedPreferences: AppPreferences = {
+        ...restored.preferences,
+        logoSource: persistableLogoSource,
+        categoryDisplayNames: normalizeCategoryDisplayNames(restored.preferences.categoryDisplayNames),
+      };
+
+      setRuntimeLogoSource(logoSourceToUse);
+      setSelectedCategory(restored.selectedCategory);
+      setSelectedMaterialId(restored.selectedMaterialId);
+      setRecipientEmail(restored.recipientEmail);
+      setMaterials(restored.materials);
+      setCartItems(restored.cartItems);
+      setNextLeadNumber(restored.nextLeadNumber);
+      setPreferences(normalizedPreferences);
+      setDraftPreferences(normalizedPreferences);
+
+      const restoredTemplate = typeof normalizedPreferences.emailTemplate === 'string'
+        ? stringToTemplateElements(normalizedPreferences.emailTemplate)
+        : normalizedPreferences.emailTemplate;
+      setTemplateElements(restoredTemplate);
+      setDraftTemplateElements(restoredTemplate);
+
+      onHeaderPreferencesChange?.({
+        appName: normalizedPreferences.appName,
+        headerSubtitle: normalizedPreferences.headerSubtitle,
+        logoSource: logoSourceToUse,
+        themeMode: normalizedPreferences.themeMode,
+      });
+
+      await AsyncStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          ...restored,
+          preferences: normalizedPreferences,
+        })
+      );
+
+      setStatusMessage('Respaldo restaurado correctamente.');
+      setStatusType('success');
+    } catch (error) {
+      const message = error instanceof Error && error.message ? error.message : 'No se pudo restaurar el respaldo.';
+      setStatusMessage(message);
+      setStatusType('error');
+    } finally {
+      setIsRestoringBackup(false);
+    }
+  }
+
   async function sendCartByEmail() {
     if (!recipientEmail.trim()) {
       setStatusMessage('Define un correo destino para enviar la solicitud.');
@@ -1352,11 +1537,11 @@ export default function BolsasScreen({
       <ScrollView
         className="flex-1"
         style={{ backgroundColor: theme.pageBg }}
-        contentContainerClassName="px-4 pb-32 pt-4"
+        contentContainerClassName="px-4 pb-36 pt-5"
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
       >
-      <View className="w-full self-center rounded-2xl border px-4 py-4 shadow-sm" style={{ backgroundColor: theme.panelBg, borderColor: theme.border }}>
+      <View className="w-full max-w-[1120px] self-center rounded-2xl border px-5 py-5 shadow-sm" style={{ backgroundColor: theme.panelBg, borderColor: theme.border }}>
         {statusMessage ? (
           <View className="mb-4">
             <View className={`rounded-xl border px-4 py-3 ${statusType === 'error' ? 'border-corporate-error bg-corporate-error/10' : 'border-corporate-primary/20'}`} style={{ backgroundColor: theme.panelAltBg }}>
@@ -1365,15 +1550,15 @@ export default function BolsasScreen({
           </View>
         ) : null}
 
-        <Animated.View className="mb-4 rounded-2xl border px-4 py-4 shadow-sm" style={[{ backgroundColor: theme.panelBg, borderColor: theme.border }, getSectionEntryStyle(0)]}>
+        <Animated.View className="mb-5 rounded-2xl border px-5 py-5 shadow-sm" style={[{ backgroundColor: theme.panelBg, borderColor: theme.border }, getSectionEntryStyle(0)]}>
           <View className="flex-row items-center justify-between">
             <View className="flex-1 pr-3">
               <Text className="text-[13px] uppercase tracking-[0.14em]" style={{ color: theme.muted }}>{preferences.appName}</Text>
               <Text className="mt-1 text-2xl font-bold" style={{ color: theme.text }}>{preferences.headerSubtitle}</Text>
             </View>
             <View className="items-center justify-center rounded-xl border px-3 py-3" style={{ borderColor: theme.border, backgroundColor: theme.panelAltBg }}>
-              {preferences.logoSource ? (
-                <Image source={{ uri: preferences.logoSource }} style={{ width: 48, height: 48, borderRadius: 12 }} resizeMode="cover" />
+              {effectiveSavedLogoSource ? (
+                <Image source={{ uri: effectiveSavedLogoSource }} style={{ width: 48, height: 48, borderRadius: 12 }} resizeMode="cover" />
               ) : (
                 <MaterialCommunityIcons name="clipboard-text-outline" size={22} color={accent.color} />
               )}
@@ -1384,20 +1569,20 @@ export default function BolsasScreen({
           </Text>
         </Animated.View>
 
-        <Animated.View className="mb-4 rounded-2xl border px-3 py-3 shadow-sm" style={[{ backgroundColor: theme.panelBg, borderColor: theme.border }, getSectionEntryStyle(0)]}>
-          <View className="flex-row gap-2">
-            <View className="flex-1 rounded-xl border px-3 py-2" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
-              <Text className="text-[11px] tracking-[0.05em]" style={{ color: theme.muted }}>Catálogo activo</Text>
+        <Animated.View className="mb-5 rounded-2xl border px-4 py-4 shadow-sm" style={[{ backgroundColor: theme.panelBg, borderColor: theme.border }, getSectionEntryStyle(0)]}>
+          <View className="flex-row flex-wrap gap-2">
+            <View className="min-w-[31%] flex-1 rounded-xl border px-3 py-2" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
+              <Text className="text-[11px] tracking-[0.05em]" style={{ color: theme.muted }}>Catálogo</Text>
               <Text className="mt-1 text-lg font-bold" style={{ color: theme.text }}>{currentMaterials.length}</Text>
               <Text className="text-xs" style={{ color: theme.muted }}>{categoryLabelForUi(selectedCategory)}</Text>
             </View>
-            <View className="flex-1 rounded-xl border px-3 py-2" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
-              <Text className="text-[11px] tracking-[0.05em]" style={{ color: theme.muted }}>En solicitud</Text>
+            <View className="min-w-[31%] flex-1 rounded-xl border px-3 py-2" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
+              <Text className="text-[11px] tracking-[0.05em]" style={{ color: theme.muted }}>En curso</Text>
               <Text className="mt-1 text-lg font-bold" style={{ color: theme.text }}>{requestSummary.materials}</Text>
               <Text className="text-xs" style={{ color: theme.muted }}>Materiales</Text>
             </View>
-            <View className="flex-1 rounded-xl border px-3 py-2" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
-              <Text className="text-[11px] tracking-[0.05em]" style={{ color: theme.muted }}>Kg a surtir</Text>
+            <View className="min-w-[31%] flex-1 rounded-xl border px-3 py-2" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
+              <Text className="text-[11px] tracking-[0.05em]" style={{ color: theme.muted }}>Kg programados</Text>
               <Text className="mt-1 text-lg font-bold" style={{ color: theme.text }}>{formatNumber(requestSummary.totalKg)}</Text>
               <Text className="text-xs" style={{ color: theme.muted }}>Acumulado</Text>
             </View>
@@ -1436,7 +1621,7 @@ export default function BolsasScreen({
           </View>
         </View>
 
-        <View className="mb-4 rounded-2xl border px-3 py-3 shadow-sm" style={{ backgroundColor: theme.panelBg, borderColor: theme.border }}>
+        <View className="mb-4 rounded-2xl border px-4 py-4 shadow-sm" style={{ backgroundColor: theme.panelBg, borderColor: theme.border }}>
           <View className="mb-3 flex-row items-center justify-between">
             <Text className="text-sm font-semibold tracking-[0.06em]" style={{ color: theme.muted }}>Alta de material</Text>
             <Text className="text-xs" style={{ color: theme.muted }}>{categoryLabelForUi(selectedCategory)}</Text>
@@ -1459,7 +1644,7 @@ export default function BolsasScreen({
                   : 'Ej. Bolsa reciclada 60x90'
             }
             placeholderTextColor={theme.muted}
-            className="mb-3 rounded-ind border px-3 py-3"
+            className="mb-3 rounded-ind border px-3 py-2.5"
             style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }}
           />
 
@@ -1475,7 +1660,7 @@ export default function BolsasScreen({
                     }))
                   }
                   hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                  className="flex-1 rounded-ind border px-3 py-3"
+                  className="flex-1 min-h-[44px] items-center justify-center rounded-xl border px-3 py-3"
                   style={drafts.bolsas.weightUnit === 'g' ? { backgroundColor: accent.color, borderColor: accent.border } : { backgroundColor: theme.panelAltBg, borderColor: theme.border }}
                 >
                   <Text className="text-center text-sm font-semibold" style={{ color: drafts.bolsas.weightUnit === 'g' ? accentTextColor : theme.text }}>
@@ -1490,7 +1675,7 @@ export default function BolsasScreen({
                     }))
                   }
                   hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                    className="flex-1 rounded-ind border px-3 py-3"
+                    className="flex-1 min-h-[44px] items-center justify-center rounded-xl border px-3 py-3"
                     style={drafts.bolsas.weightUnit === 'kg' ? { backgroundColor: accent.color, borderColor: accent.border } : { backgroundColor: theme.panelAltBg, borderColor: theme.border }}
                 >
                     <Text className="text-center text-sm font-semibold" style={{ color: drafts.bolsas.weightUnit === 'kg' ? accentTextColor : theme.text }}>
@@ -1511,7 +1696,7 @@ export default function BolsasScreen({
                 keyboardType="decimal-pad"
                 placeholder={drafts.bolsas.weightUnit === 'g' ? 'Ej. 450' : 'Ej. 0.450'}
                 placeholderTextColor={theme.muted}
-                className={`rounded-ind border px-3 py-3 ${drafts.bolsas.weightInput.trim().length > 0 && !isNonEmptyPositive(convertToKg(parseOptionalPositiveNumber(drafts.bolsas.weightInput), drafts.bolsas.weightUnit)) ? 'border-corporate-error bg-corporate-error/10' : ''}`}
+                className={`rounded-ind border px-3 py-2.5 ${drafts.bolsas.weightInput.trim().length > 0 && !isNonEmptyPositive(convertToKg(parseOptionalPositiveNumber(drafts.bolsas.weightInput), drafts.bolsas.weightUnit)) ? 'border-corporate-error bg-corporate-error/10' : ''}`}
                 style={{ backgroundColor: theme.inputBg, borderColor: drafts.bolsas.weightInput.trim().length > 0 && !isNonEmptyPositive(convertToKg(parseOptionalPositiveNumber(drafts.bolsas.weightInput), drafts.bolsas.weightUnit)) ? UI_COLORS.danger : theme.inputBorder, color: theme.text }}
               />
             </>
@@ -1540,7 +1725,7 @@ export default function BolsasScreen({
                         }))
                       }
                       hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                        className="flex-1 rounded-ind border px-3 py-3"
+                        className="flex-1 min-h-[44px] items-center justify-center rounded-xl border px-3 py-3"
                         style={active ? { backgroundColor: accent.color, borderColor: accent.border } : { backgroundColor: theme.panelAltBg, borderColor: theme.border }}
                     >
                         <Text className="text-center text-sm font-semibold" style={{ color: active ? accentTextColor : theme.text }}>
@@ -1558,7 +1743,7 @@ export default function BolsasScreen({
             className="mt-4 min-h-[48px] rounded-ind border border-corporate-primary bg-corporate-primary px-4 py-4"
             style={({ pressed }) => [
               { backgroundColor: accent.color, borderColor: accent.border },
-              pressed ? { opacity: 0.86 } : undefined,
+              pressed ? { opacity: 0.86, transform: [{ scale: 0.995 }] } : undefined,
             ]}
           >
             <View className="flex-row items-center justify-center gap-2">
@@ -1593,7 +1778,7 @@ export default function BolsasScreen({
           />
         ))}
 
-        <View className="mt-2 rounded-2xl border px-4 py-4 shadow-sm" style={{ backgroundColor: theme.panelBg, borderColor: theme.border }}>
+        <View className="mt-3 rounded-2xl border px-4 py-4 shadow-sm" style={{ backgroundColor: theme.panelBg, borderColor: theme.border }}>
           <Text className="mb-2 text-sm font-semibold tracking-[0.06em]" style={{ color: theme.muted }}>
             {selectedMaterial ? getInputLabel(selectedMaterial) : 'Cantidad'}
           </Text>
@@ -1616,11 +1801,11 @@ export default function BolsasScreen({
             }
             placeholderTextColor={theme.muted}
             editable={Boolean(selectedMaterial)}
-            className={`rounded-ind border px-4 py-4 text-xl font-semibold ${selectedMaterial && !isNonEmptyPositive(selectedMaterial.requestValue) ? 'border-corporate-error bg-corporate-error/10' : ''}`}
+            className={`rounded-ind border px-4 py-3 text-xl font-semibold ${selectedMaterial && !isNonEmptyPositive(selectedMaterial.requestValue) ? 'border-corporate-error bg-corporate-error/10' : ''}`}
             style={{ backgroundColor: theme.inputBg, borderColor: selectedMaterial && !isNonEmptyPositive(selectedMaterial.requestValue) ? UI_COLORS.danger : theme.inputBorder, color: theme.text }}
           />
           <Text className="mt-2 text-xs" style={{ color: theme.muted }}>
-            Captura la cantidad base y el sistema calcula el valor final según la categoría.
+            Captura el dato base y el sistema calcula automáticamente el resultado.
           </Text>
         </View>
 
@@ -1634,7 +1819,7 @@ export default function BolsasScreen({
           <Text className="mt-1 text-center text-xs" style={{ color: accent.soft }}>
             {selectedMaterial ? unitLabel(selectedResultUnit) : 'Selecciona o crea un material'}
           </Text>
-          <Text className="mt-2 text-center text-xs text-corporate-muted">
+          <Text className="mt-2 text-center text-xs" style={{ color: theme.muted }}>
             {selectedMaterial ? `Categoría activa: ${categoryLabelForUi(selectedMaterial.category)} · ${selectedMaterial.title}` : 'Sin material seleccionado'}
           </Text>
         </View>
@@ -1644,7 +1829,7 @@ export default function BolsasScreen({
           className="mt-4 min-h-[48px] rounded-xl border border-corporate-primary bg-corporate-primary px-4 py-4"
           style={({ pressed }) => [
             { backgroundColor: accent.color, borderColor: accent.border },
-            pressed ? { opacity: 0.86 } : undefined,
+            pressed ? { opacity: 0.86, transform: [{ scale: 0.995 }] } : undefined,
           ]}
           hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
         >
@@ -1654,17 +1839,22 @@ export default function BolsasScreen({
         </Pressable>
         </Animated.View>
 
-        <Animated.View className="mt-6" style={getSectionEntryStyle(2)}>
-          <View className="mb-3 flex-row items-center justify-between">
-            <View className="flex-row items-center gap-2">
+        <Animated.View className="mt-7" style={getSectionEntryStyle(2)}>
+          <View className="mb-3 flex-row items-start justify-between">
+            <View className="flex-row items-start gap-2">
               <View className="h-5 w-5 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
                 <MaterialCommunityIcons name="clipboard-list-outline" size={16} color={UI_COLORS.blue} />
               </View>
-              <Text className="text-xl font-semibold text-corporate-text">Resumen de solicitud</Text>
+              <View>
+                <Text className="text-xl font-semibold" style={{ color: theme.text }}>Resumen de solicitud</Text>
+                <Text className="mt-1 text-xs" style={{ color: theme.muted }}>Control operativo previo al envío</Text>
+              </View>
             </View>
-            <View className="items-end">
-              <Text className="text-xs text-corporate-muted">Próximo folio: {buildRequestCode(preferences.folioPrefix, nextLeadNumber)}</Text>
-              <Text className="mt-1 text-xs" style={{ color: theme.muted }}>
+            <View className="items-end gap-1">
+              <View className="rounded-pill border px-2.5 py-1" style={{ borderColor: theme.border, backgroundColor: theme.panelAltBg }}>
+                <Text className="text-[11px]" style={{ color: theme.muted }}>Próximo folio: {buildRequestCode(preferences.folioPrefix, nextLeadNumber)}</Text>
+              </View>
+              <Text className="text-xs" style={{ color: theme.muted }}>
                 {formatNumber(requestSummary.totalPieces)} pzas · {formatNumber(requestSummary.totalKg)} kg
               </Text>
             </View>
@@ -1673,10 +1863,10 @@ export default function BolsasScreen({
           <View className="rounded-2xl border p-2 shadow-sm" style={{ borderColor: theme.border, backgroundColor: theme.panelBg }}>
             <View className="mb-2 rounded-xl border px-3 py-2" style={{ borderColor: theme.border, backgroundColor: theme.panelAltBg }}>
               <View className="mb-2 flex-row items-center gap-2">
-                <View className="h-4 w-4 items-center justify-center rounded border border-corporate-border">
+                <View className="h-4 w-4 items-center justify-center rounded border" style={{ borderColor: theme.border }}>
                   <MaterialCommunityIcons name="email-fast-outline" size={10} color={UI_COLORS.blue} />
                 </View>
-                <Text className="text-xs font-semibold tracking-[0.06em] text-corporate-muted">Destino de envío</Text>
+                <Text className="text-xs font-semibold tracking-[0.06em]" style={{ color: theme.muted }}>Destino de envío</Text>
               </View>
               <TextInput
                 value={recipientEmail}
@@ -1685,11 +1875,12 @@ export default function BolsasScreen({
                 autoCapitalize="none"
                 placeholder="correo@empresa.com"
                 placeholderTextColor={theme.muted}
-                className={`rounded-ind border px-3 py-3 text-corporate-text ${recipientEmail.trim().length > 0 && !isValidEmail(recipientEmail) ? 'border-corporate-error bg-corporate-error/10' : 'border-corporate-border bg-corporate-surface'}`}
+                className={`rounded-ind border px-3 py-3 ${recipientEmail.trim().length > 0 && !isValidEmail(recipientEmail) ? 'border-corporate-error bg-corporate-error/10' : ''}`}
+                style={{ backgroundColor: theme.inputBg, borderColor: recipientEmail.trim().length > 0 && !isValidEmail(recipientEmail) ? UI_COLORS.danger : theme.inputBorder, color: theme.text }}
               />
-              <Text className={`mt-2 text-xs ${recipientEmail.trim().length === 0 || isValidEmail(recipientEmail) ? 'text-corporate-muted' : 'text-corporate-error'}`}>
+              <Text className="mt-2 text-xs" style={{ color: recipientEmail.trim().length === 0 || isValidEmail(recipientEmail) ? theme.muted : UI_COLORS.danger }}>
                 {recipientEmail.trim().length === 0
-                  ? 'Este correo se usará para enviar el resumen y se guarda localmente.'
+                  ? 'Este correo se usa para enviar el resumen y queda guardado localmente.'
                   : isValidEmail(recipientEmail)
                     ? 'Correo válido para envío.'
                     : 'Formato de correo no válido.'}
@@ -1697,38 +1888,42 @@ export default function BolsasScreen({
             </View>
 
             {cartItems.length === 0 ? (
-              <View className="rounded-xl border border-dashed border-corporate-border px-3 py-4">
-                <Text className="text-sm text-corporate-muted">Aún no hay materiales en el resumen.</Text>
+              <View className="rounded-xl border border-dashed px-4 py-5" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
+                <View className="flex-row items-center gap-2">
+                  <MaterialCommunityIcons name="tray-minus" size={16} color={theme.muted} />
+                  <Text className="text-sm font-medium" style={{ color: theme.text }}>No hay materiales en el resumen.</Text>
+                </View>
+                <Text className="mt-1 text-xs" style={{ color: theme.muted }}>Agrega materiales para habilitar el envío.</Text>
               </View>
             ) : (
               cartItems.map((item) => (
-                <View key={item.id} className="mb-1 rounded-xl border border-corporate-border bg-corporate-surface px-2 py-2">
-                  <View className="gap-2">
+                <View key={item.id} className="mb-2 rounded-xl border px-3 py-3" style={{ borderColor: theme.border, backgroundColor: theme.inputBg }}>
+                  <View className="gap-3">
                     <View className="flex-row items-start justify-between gap-2">
                       <View className="flex-1 pr-2">
-                        <Text className="text-sm font-semibold text-corporate-text">{item.materialTitle}</Text>
-                        <Text className="text-[13px] text-corporate-muted">
+                        <Text className="text-sm font-semibold" style={{ color: theme.text }}>{item.materialTitle}</Text>
+                        <Text className="text-[13px]" style={{ color: theme.muted }}>
                           {categoryLabelForUi(item.category)} · {modeLabel(item.calcMode)}
                         </Text>
                       </View>
                       <Pressable
                         onPress={() => removeCartItem(item.id)}
                         hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                        className="min-h-10 min-w-10 items-center justify-center rounded-ind border border-corporate-border px-3 py-2"
+                        className="min-h-10 min-w-10 items-center justify-center rounded-ind border px-3 py-2"
                         style={({ pressed }) => [{ borderColor: accent.border }, pressed ? { opacity: 0.82 } : undefined]}
                       >
-                        <Text className="text-[12px] font-semibold text-corporate-text">Quitar</Text>
+                        <Text className="text-[12px] font-semibold" style={{ color: theme.text }}>Quitar</Text>
                       </Pressable>
                     </View>
 
                     <View className="flex-row flex-wrap gap-3">
-                      <View className="rounded-ind border border-corporate-border px-2 py-1">
-                        <Text className="text-[11px] tracking-[0.04em] text-corporate-muted">Capt.</Text>
-                        <Text className="text-sm font-semibold text-corporate-text">{formatNumber(item.requestValue)}</Text>
+                      <View className="rounded-ind border px-2 py-1" style={{ borderColor: theme.border }}>
+                        <Text className="text-[11px] tracking-[0.04em]" style={{ color: theme.muted }}>Capturado</Text>
+                        <Text className="text-sm font-semibold" style={{ color: theme.text }}>{formatNumber(item.requestValue)}</Text>
                       </View>
-                      <View className="rounded-ind border border-corporate-border px-2 py-1">
-                        <Text className="text-[11px] tracking-[0.04em] text-corporate-muted">Res.</Text>
-                        <Text className="text-sm font-semibold text-corporate-text">{formatNumber(item.calculatedValue)}</Text>
+                      <View className="rounded-ind border px-2 py-1" style={{ borderColor: theme.border }}>
+                        <Text className="text-[11px] tracking-[0.04em]" style={{ color: theme.muted }}>Resultado</Text>
+                        <Text className="text-sm font-semibold" style={{ color: theme.text }}>{formatNumber(item.calculatedValue)}</Text>
                       </View>
                     </View>
                   </View>
@@ -1740,11 +1935,8 @@ export default function BolsasScreen({
               <Pressable
                 onPress={clearCart}
                 hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                className="flex-1 min-h-[46px] items-center justify-center rounded-ind border border-corporate-border px-3 py-3"
-                style={({ pressed }) => [
-                  { borderColor: theme.border, backgroundColor: theme.panelAltBg },
-                  pressed ? { opacity: 0.86 } : undefined,
-                ]}
+                className="flex-1 min-h-[46px] items-center justify-center rounded-ind border px-3 py-3"
+                style={{ borderColor: theme.border, backgroundColor: theme.panelAltBg }}
               >
                 <Text className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>Vaciar solicitud</Text>
               </Pressable>
@@ -1755,12 +1947,9 @@ export default function BolsasScreen({
                 }}
                 hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                 className="flex-1 min-h-[46px] items-center justify-center rounded-ind border px-3 py-3"
-                style={({ pressed }) => [
-                  canSendEmail ? { backgroundColor: accent.color, borderColor: accent.border } : { backgroundColor: theme.panelAltBg, borderColor: theme.border },
-                  canSendEmail && pressed ? { opacity: 0.86 } : undefined,
-                ]}
+                style={canSendEmail ? { backgroundColor: accent.color, borderColor: accent.border } : { backgroundColor: theme.panelAltBg, borderColor: theme.border, opacity: 0.72 }}
               >
-                <Text className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: canSendEmail ? accentTextColor : theme.muted }}>
+                <Text className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: canSendEmail ? accentTextColor : theme.text }}>
                   {isSendingEmail ? 'Enviando...' : 'Enviar solicitud'}
                 </Text>
               </Pressable>
@@ -1768,7 +1957,7 @@ export default function BolsasScreen({
           </View>
         </Animated.View>
 
-        <Animated.View className="mt-4 rounded-2xl border px-4 py-4 shadow-sm" style={[{ backgroundColor: theme.panelBg, borderColor: theme.border }, getSectionEntryStyle(3)]}>
+        <Animated.View className="mt-6 rounded-2xl border px-4 py-4 shadow-sm" style={[{ backgroundColor: theme.panelBg, borderColor: theme.border }, getSectionEntryStyle(3)]}>
           <Pressable onPress={() => setSettingsOpen((current) => !current)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} className="flex-row items-center justify-between">
             <View className="flex-row items-center gap-2">
               <View className="h-5 w-5 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
@@ -1778,6 +1967,7 @@ export default function BolsasScreen({
             </View>
             <Text className="text-base font-bold" style={{ color: theme.muted }}>{settingsOpen ? '˄' : '˅'}</Text>
           </Pressable>
+          <Text className="mt-1 text-xs" style={{ color: theme.muted }}>Marca, respaldo, plantilla y configuración visual</Text>
 
           {renderSettingsPanel ? (
             <Animated.View className="mt-4 overflow-hidden" style={getSettingsPanelStyle()}>
@@ -1786,7 +1976,12 @@ export default function BolsasScreen({
                   <View className="h-4 w-4 items-center justify-center rounded border" style={{ borderColor: theme.border }}>
                     <MaterialCommunityIcons name="palette-outline" size={10} color={accent.color} />
                   </View>
-                  <Text className="text-xs font-semibold tracking-[0.06em]" style={{ color: theme.muted }}>Marca, logo y exportación</Text>
+                  <Text className="text-xs font-semibold tracking-[0.06em]" style={{ color: theme.muted }}>Configuración general</Text>
+                </View>
+                <Text className="mb-3 text-xs" style={{ color: theme.muted }}>Ajusta marca, plantilla y operación en bloques independientes.</Text>
+
+                <View className="mb-3 rounded-xl border px-3 py-2" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
+                  <Text className="text-[11px] font-semibold tracking-[0.08em]" style={{ color: theme.muted }}>Marca y encabezado</Text>
                 </View>
 
                 <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Nombre visible de la app</Text>
@@ -1833,7 +2028,7 @@ export default function BolsasScreen({
                   }
                   placeholder="Bolsas"
                   placeholderTextColor={theme.muted}
-                  className="mb-2 rounded-xl border px-3 py-3"
+                  className="mb-2 rounded-xl border px-3 py-2.5"
                   style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }}
                 />
 
@@ -1851,7 +2046,7 @@ export default function BolsasScreen({
                   }
                   placeholder="Cajas"
                   placeholderTextColor={theme.muted}
-                  className="mb-2 rounded-xl border px-3 py-3"
+                  className="mb-2 rounded-xl border px-3 py-2.5"
                   style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }}
                 />
 
@@ -1869,7 +2064,7 @@ export default function BolsasScreen({
                   }
                   placeholder="Otros"
                   placeholderTextColor={theme.muted}
-                  className="mb-3 rounded-xl border px-3 py-3"
+                  className="mb-3 rounded-xl border px-3 py-2.5"
                   style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }}
                 />
 
@@ -1933,7 +2128,7 @@ export default function BolsasScreen({
                   }
                   placeholder="CS"
                   placeholderTextColor={theme.muted}
-                  className="mb-3 rounded-xl border px-3 py-3"
+                  className="mb-3 rounded-xl border px-3 py-2.5"
                   style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }}
                 />
                 <View className="mb-3 rounded-xl border px-3 py-3" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
@@ -1955,9 +2150,13 @@ export default function BolsasScreen({
                   }
                   placeholder="Operación interna segura y trazable."
                   placeholderTextColor={theme.muted}
-                  className="mb-4 rounded-xl border px-3 py-3"
+                  className="mb-4 rounded-xl border px-3 py-2.5"
                   style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }}
                 />
+
+                <View className="mb-3 rounded-xl border px-3 py-2" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
+                  <Text className="text-[11px] font-semibold tracking-[0.08em]" style={{ color: theme.muted }}>Plantilla y comunicación</Text>
+                </View>
 
                 <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Machote del correo</Text>
                 <TextInput
@@ -1972,10 +2171,10 @@ export default function BolsasScreen({
                   style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }}
                 />
                 <Text className="mb-3 text-xs" style={{ color: theme.muted }}>
-                  Placeholders: {'{logo}'} {'{greeting}'} {'{folio}'} {'{totalMaterials}'} {'{totalPieces}'} {'{totalKg}'} {'{attachmentNote}'} {'{emailNote}'}
+                  Variables: {'{logo}'} {'{greeting}'} {'{folio}'} {'{materialTable}'} {'{requestDate}'} {'{totalKg}'} {'{attachmentNote}'} {'{emailNote}'}
                 </Text>
 
-                <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Texto para Excel / CSV</Text>
+                <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Texto para Excel</Text>
                   <TextInput
                     value={draftPreferences.sheetNote}
                     onChangeText={(value) =>
@@ -1998,6 +2197,10 @@ export default function BolsasScreen({
                     Carga el logo desde la galería del dispositivo. La app lo guarda en local al presionar guardar.
                   </Text>
 
+                  <View className="mb-3 rounded-xl border px-3 py-2" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
+                    <Text className="text-[11px] font-semibold tracking-[0.08em]" style={{ color: theme.muted }}>Identidad visual</Text>
+                  </View>
+
                   <View className="mb-3 flex-row gap-2">
                   <Pressable
                     onPress={() => void pickLogoFromDevice()}
@@ -2005,7 +2208,7 @@ export default function BolsasScreen({
                     className="flex-1 min-h-[46px] items-center justify-center rounded-ind border px-3 py-3"
                     style={({ pressed }) => [
                       { borderColor: theme.border, backgroundColor: theme.panelAltBg },
-                      pressed ? { opacity: 0.86 } : undefined,
+                      pressed ? { opacity: 0.86, transform: [{ scale: 0.995 }] } : undefined,
                     ]}
                   >
                     <Text className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>
@@ -2014,17 +2217,20 @@ export default function BolsasScreen({
                     </Pressable>
                     <Pressable
                       onPress={() =>
-                        setDraftPreferences((current) => ({
-                          ...current,
-                          logoSource: '',
-                          logoLabel: DEFAULT_PREFERENCES.logoLabel,
-                        }))
+                        {
+                          setRuntimeLogoSource('');
+                          setDraftPreferences((current) => ({
+                            ...current,
+                            logoSource: '',
+                            logoLabel: DEFAULT_PREFERENCES.logoLabel,
+                          }));
+                        }
                       }
                       hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                       className="flex-1 min-h-[46px] items-center justify-center rounded-ind border px-3 py-3"
                       style={({ pressed }) => [
                         { borderColor: theme.border, backgroundColor: theme.panelAltBg },
-                        pressed ? { opacity: 0.86 } : undefined,
+                        pressed ? { opacity: 0.86, transform: [{ scale: 0.995 }] } : undefined,
                       ]}
                     >
                       <Text className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>
@@ -2037,8 +2243,8 @@ export default function BolsasScreen({
                     <Text className="mb-2 text-[13px] tracking-[0.08em]" style={{ color: theme.muted }}>Vista previa</Text>
                     <View className="flex-row items-center gap-3">
                       <View className="h-14 w-14 items-center justify-center rounded-ind overflow-hidden" style={{ backgroundColor: theme.panelAltBg }}>
-                        {draftPreferences.logoSource ? (
-                          <Image source={{ uri: draftPreferences.logoSource }} style={{ width: 56, height: 56, borderRadius: 12 }} resizeMode="cover" />
+                        {effectiveDraftLogoPreviewSource ? (
+                          <Image source={{ uri: effectiveDraftLogoPreviewSource }} style={{ width: 56, height: 56, borderRadius: 12 }} resizeMode="cover" />
                         ) : (
                           <MaterialCommunityIcons name="image-outline" size={22} color={accent.color} />
                         )}
@@ -2046,16 +2252,19 @@ export default function BolsasScreen({
                       <View className="flex-1">
                         <Text className="text-sm font-semibold" style={{ color: theme.text }}>{draftPreferences.logoLabel || 'Sin logo cargado'}</Text>
                         <Text className="mt-1 text-xs" style={{ color: theme.muted }}>
-                          {draftPreferences.logoSource ? 'Se usará en app, correo y exportación cuando guardes.' : 'Todavía no hay un logo personalizado.'}
+                          {effectiveDraftLogoPreviewSource ? 'Se usará en app, correo y exportación cuando guardes.' : 'Todavía no hay un logo personalizado.'}
                         </Text>
                       </View>
                     </View>
                   </View>
 
                   <View className="mb-4 rounded-xl border px-4 py-4" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
+                    <View className="mb-2 rounded-xl border px-3 py-2" style={{ backgroundColor: theme.panelBg, borderColor: theme.border }}>
+                      <Text className="text-[11px] font-semibold tracking-[0.08em]" style={{ color: theme.muted }}>Datos operativos</Text>
+                    </View>
                     <Text className="mb-2 text-[13px] tracking-[0.08em]" style={{ color: theme.muted }}>Base de materiales</Text>
                     <Text className="mb-3 text-xs" style={{ color: theme.muted }}>
-                      Importa un archivo Excel o CSV con columnas: categoria, titulo, modo, unidad_solicitud, peso_por_100, unidad_peso.
+                      Importa Excel/CSV con columnas: categoria, titulo, modo, unidad_solicitud, peso_por_100, unidad_peso.
                     </Text>
                     <Pressable
                       onPress={() => void importMaterialsDatabase()}
@@ -2063,7 +2272,7 @@ export default function BolsasScreen({
                       className="min-h-[46px] items-center justify-center rounded-ind border px-3 py-3"
                       style={({ pressed }) => [
                         { borderColor: theme.border, backgroundColor: theme.panelAltBg },
-                        pressed ? { opacity: 0.86 } : undefined,
+                        pressed ? { opacity: 0.86, transform: [{ scale: 0.995 }] } : undefined,
                       ]}
                     >
                       <Text className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>
@@ -2072,20 +2281,59 @@ export default function BolsasScreen({
                     </Pressable>
                   </View>
 
-                <View className="mt-4 flex-row items-center justify-between gap-3">
-                  <Text className="text-xs font-medium" style={{ color: hasPendingPreferenceChanges ? UI_COLORS.danger : theme.muted }}>
+                  <View className="mb-4 rounded-xl border px-4 py-4" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
+                    <Text className="mb-2 text-[13px] tracking-[0.08em]" style={{ color: theme.muted }}>Respaldo en nube (JSON)</Text>
+                    <Text className="mb-3 text-xs" style={{ color: theme.muted }}>
+                      Genera un respaldo JSON y súbelo a Drive, OneDrive o iCloud desde compartir.
+                    </Text>
+                    <View className="flex-row gap-2">
+                      <Pressable
+                        onPress={() => void createCloudBackup()}
+                        disabled={isCreatingBackup || isRestoringBackup}
+                        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                        className="flex-1 min-h-[46px] items-center justify-center rounded-ind border px-3 py-3"
+                        style={({ pressed }) => [
+                          { borderColor: theme.border, backgroundColor: theme.panelBg },
+                          isCreatingBackup || isRestoringBackup ? { opacity: 0.68 } : undefined,
+                          pressed && !(isCreatingBackup || isRestoringBackup) ? { opacity: 0.86, transform: [{ scale: 0.995 }] } : undefined,
+                        ]}
+                      >
+                        <Text className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>
+                          {isCreatingBackup ? 'Generando...' : 'Crear respaldo'}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => void restoreFromBackup()}
+                        disabled={isCreatingBackup || isRestoringBackup}
+                        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
+                        className="flex-1 min-h-[46px] items-center justify-center rounded-ind border px-3 py-3"
+                        style={({ pressed }) => [
+                          { borderColor: theme.border, backgroundColor: theme.panelBg },
+                          isCreatingBackup || isRestoringBackup ? { opacity: 0.68 } : undefined,
+                          pressed && !(isCreatingBackup || isRestoringBackup) ? { opacity: 0.86, transform: [{ scale: 0.995 }] } : undefined,
+                        ]}
+                      >
+                        <Text className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>
+                          {isRestoringBackup ? 'Restaurando...' : 'Restaurar respaldo'}
+                        </Text>
+                      </Pressable>
+                    </View>
+                    <Text className="mt-3 text-xs" style={{ color: theme.muted }}>
+                      {lastBackupAt ? `Último respaldo: ${new Date(lastBackupAt).toLocaleString('es-MX')}` : 'Aún no has generado respaldos.'}
+                    </Text>
+                  </View>
+
+                <View className="mt-5 rounded-xl border px-3 py-3" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
+                  <Text className="mb-3 text-xs font-medium" style={{ color: hasPendingPreferenceChanges ? UI_COLORS.danger : theme.muted }}>
                     {hasPendingPreferenceChanges ? 'Hay cambios sin guardar.' : 'Configuración guardada.'}
                   </Text>
                   <Pressable
                     onPress={savePreferences}
                     hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                    className="min-h-[44px] items-center justify-center rounded-xl border border-corporate-primary px-4 py-3"
-                    style={({ pressed }) => [
-                      { backgroundColor: accent.color, borderColor: accent.border },
-                      pressed ? { opacity: 0.84 } : undefined,
-                    ]}
+                    className="min-h-[46px] items-center justify-center rounded-xl border border-corporate-primary bg-corporate-primary px-4 py-3"
+                    style={{ backgroundColor: accent.color, borderColor: accent.border }}
                   >
-                    <Text className="text-xs font-semibold tracking-[0.04em]" style={{ color: isDarkTheme ? UI_COLORS.white : accentTextColor }}>Guardar cambios</Text>
+                    <Text className="text-xs font-semibold tracking-[0.04em]" style={{ color: accentTextColor }}>Guardar cambios</Text>
                   </Pressable>
                 </View>
               </View>

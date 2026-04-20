@@ -44,7 +44,7 @@ export type AccentPreset = {
   soft: string;
 };
 
-export type AvailableField = 'logo' | 'greeting' | 'folio' | 'totalMaterials' | 'totalPieces' | 'totalKg' | 'attachmentNote' | 'emailNote';
+export type AvailableField = 'logo' | 'greeting' | 'folio' | 'materialTable' | 'requestDate' | 'totalKg' | 'totalMaterials' | 'totalPieces' | 'attachmentNote' | 'emailNote';
 
 export type TemplateElement =
   | { type: 'text'; content: string }

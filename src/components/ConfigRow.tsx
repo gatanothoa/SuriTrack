@@ -71,14 +71,14 @@ export default function ConfigRow({ item, accent, accentTextColor, theme, onChan
               className="flex-1 min-h-[44px] items-center justify-center rounded-xl border px-3 py-3"
               style={item.weightUnit === 'g' ? { backgroundColor: accent.color, borderColor: accent.border } : { backgroundColor: theme.panelAltBg, borderColor: theme.border }}
             >
-              <Text className="text-center text-sm font-semibold" style={{ color: item.weightUnit === 'g' ? accentTextColor : theme.muted }}>Gramos</Text>
+              <Text className="text-center text-sm font-semibold" style={{ color: item.weightUnit === 'g' ? accentTextColor : theme.text }}>Gramos</Text>
             </Pressable>
             <Pressable
               onPress={() => onChange(item.id, { weightUnit: 'kg' })}
               className="flex-1 min-h-[44px] items-center justify-center rounded-xl border px-3 py-3"
               style={item.weightUnit === 'kg' ? { backgroundColor: accent.color, borderColor: accent.border } : { backgroundColor: theme.panelAltBg, borderColor: theme.border }}
             >
-              <Text className="text-center text-sm font-semibold" style={{ color: item.weightUnit === 'kg' ? accentTextColor : theme.muted }}>Kilogramos</Text>
+              <Text className="text-center text-sm font-semibold" style={{ color: item.weightUnit === 'kg' ? accentTextColor : theme.text }}>Kilogramos</Text>
             </Pressable>
           </View>
 
@@ -116,7 +116,7 @@ export default function ConfigRow({ item, accent, accentTextColor, theme, onChan
                   className="flex-1 min-h-[44px] items-center justify-center rounded-xl border px-3 py-3"
                   style={active ? { backgroundColor: accent.color, borderColor: accent.border } : { backgroundColor: theme.panelAltBg, borderColor: theme.border }}
                 >
-                  <Text className="text-center text-sm font-semibold" style={{ color: active ? accentTextColor : theme.muted }}>{unitLabel(unit)}</Text>
+                  <Text className="text-center text-sm font-semibold" style={{ color: active ? accentTextColor : theme.text }}>{unitLabel(unit)}</Text>
                 </Pressable>
               );
             })}
