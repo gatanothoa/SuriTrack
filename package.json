@@ -11,6 +11,8 @@
     "qa": "npm test -- --runInBand && npx tsc -p ./tsconfig.json --noEmit && npx expo start -c"
   },
   "dependencies": {
+    "@expo-google-fonts/inter": "^0.4.2",
+    "@expo-google-fonts/roboto": "^0.4.3",
     "@expo/vector-icons": "^15.0.3",
     "@react-native-async-storage/async-storage": "2.2.0",
     "babel-preset-expo": "~54.0.10",

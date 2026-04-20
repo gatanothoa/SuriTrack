@@ -20,6 +20,8 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as XLSX from 'xlsx';
+import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
+import { useAppColorScheme } from '../hooks/useAppColorScheme';
 import {
   calculateRequestedUnit,
   calculateRequestedValue,
@@ -494,6 +496,17 @@ export default function BolsasScreen({
 }: {
   onHeaderPreferencesChange?: (preferences: HeaderPreferencesPayload) => void;
 } = {}) {
+  // Cargar fuentes profesionales Inter
+  const [fontsLoaded] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+  });
+
+  // Detectar automáticamente tema del SO (y permitir override manual)
+  const { theme: osTheme } = useAppColorScheme();
+
   const [selectedCategory, setSelectedCategory] = useState<MaterialCategory>('bolsas');
   const [selectedMaterialId, setSelectedMaterialId] = useState('');
   const [materials, setMaterials] = useState<MaterialOption[]>([]);
@@ -514,7 +527,9 @@ export default function BolsasScreen({
   const settingsPanelAnimation = useRef(new Animated.Value(0)).current;
   const [renderSettingsPanel, setRenderSettingsPanel] = useState(false);
   const accent = BRAND_ACCENT;
-  const isDarkTheme = draftPreferences.themeMode === 'dark';
+  
+  // Tema automático del SO + preferencia manual del usuario
+  const isDarkTheme = draftPreferences.themeMode === 'dark' ? true : draftPreferences.themeMode === 'light' ? false : osTheme === 'dark';
   const accentTextColor = getAccessibleTextColorForAccent(accent.color);
   const theme = {
     pageBg: isDarkTheme ? UI_COLORS.darkBackground : UI_COLORS.background,
