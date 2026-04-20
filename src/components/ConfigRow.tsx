@@ -1,4 +1,5 @@
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Pressable, TextInput, View } from 'react-native';
+import Typography from './Typography';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { convertFromKg, convertToKg, isNonEmptyPositive, parseOptionalPositiveNumber } from '../utils/calculations';
 import type { AccentPreset, MaterialOption, MaterialUnit } from '../types/logistics';
@@ -38,7 +39,7 @@ export default function ConfigRow({ item, accent, accentTextColor, theme, onChan
           <View className="h-5 w-5 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
             <MaterialCommunityIcons name={categoryIcon(item.category)} size={16} color={accent.color} />
           </View>
-          <Text className="text-sm font-semibold" style={{ color: theme.text }}>{item.title || 'Material'}</Text>
+          <Typography className="text-sm font-semibold" style={{ color: theme.text }}>{item.title || 'Material'}</Typography>
         </View>
         <Pressable
           onPress={() => onDelete(item.id)}
@@ -48,11 +49,11 @@ export default function ConfigRow({ item, accent, accentTextColor, theme, onChan
             pressed ? { opacity: 0.8 } : undefined,
           ]}
         >
-          <Text className="text-xs font-semibold tracking-[0.04em]" style={{ color: theme.text }}>Eliminar</Text>
+          <Typography className="text-xs font-semibold tracking-[0.04em]" style={{ color: theme.text }}>Eliminar</Typography>
         </Pressable>
       </View>
 
-      <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Nombre</Text>
+      <Typography className="mb-1 text-xs" style={{ color: theme.muted }}>Nombre</Typography>
       <TextInput
         value={item.title}
         onChangeText={(value) => onChange(item.id, { title: value })}
@@ -64,25 +65,25 @@ export default function ConfigRow({ item, accent, accentTextColor, theme, onChan
 
       {item.calcMode === 'bags' ? (
         <>
-          <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Unidad base del peso</Text>
+          <Typography className="mb-1 text-xs" style={{ color: theme.muted }}>Unidad base del peso</Typography>
           <View className="mb-3 flex-row gap-2">
             <Pressable
               onPress={() => onChange(item.id, { weightUnit: 'g' })}
               className="flex-1 min-h-[44px] items-center justify-center rounded-xl border px-3 py-3"
               style={item.weightUnit === 'g' ? { backgroundColor: accent.color, borderColor: accent.border } : { backgroundColor: theme.panelAltBg, borderColor: theme.border }}
             >
-              <Text className="text-center text-sm font-semibold" style={{ color: item.weightUnit === 'g' ? accentTextColor : theme.text }}>Gramos</Text>
+              <Typography className="text-center text-sm font-semibold" style={{ color: item.weightUnit === 'g' ? accentTextColor : theme.text }}>Gramos</Typography>
             </Pressable>
             <Pressable
               onPress={() => onChange(item.id, { weightUnit: 'kg' })}
               className="flex-1 min-h-[44px] items-center justify-center rounded-xl border px-3 py-3"
               style={item.weightUnit === 'kg' ? { backgroundColor: accent.color, borderColor: accent.border } : { backgroundColor: theme.panelAltBg, borderColor: theme.border }}
             >
-              <Text className="text-center text-sm font-semibold" style={{ color: item.weightUnit === 'kg' ? accentTextColor : theme.text }}>Kilogramos</Text>
+              <Typography className="text-center text-sm font-semibold" style={{ color: item.weightUnit === 'kg' ? accentTextColor : theme.text }}>Kilogramos</Typography>
             </Pressable>
           </View>
 
-          <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Peso por 100 piezas ({item.weightUnit})</Text>
+          <Typography className="mb-1 text-xs" style={{ color: theme.muted }}>Peso por 100 piezas ({item.weightUnit})</Typography>
           <TextInput
             value={displayWeight ? String(displayWeight) : ''}
             onChangeText={(value) => {
@@ -104,7 +105,7 @@ export default function ConfigRow({ item, accent, accentTextColor, theme, onChan
 
       {item.calcMode === 'other' ? (
         <>
-          <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Unidad de solicitud</Text>
+          <Typography className="mb-1 text-xs" style={{ color: theme.muted }}>Unidad de solicitud</Typography>
           <View className="flex-row gap-2">
             {(['l', 'kg', 'g'] as const).map((unit) => {
               const active = item.requestUnit === unit;
@@ -116,7 +117,7 @@ export default function ConfigRow({ item, accent, accentTextColor, theme, onChan
                   className="flex-1 min-h-[44px] items-center justify-center rounded-xl border px-3 py-3"
                   style={active ? { backgroundColor: accent.color, borderColor: accent.border } : { backgroundColor: theme.panelAltBg, borderColor: theme.border }}
                 >
-                  <Text className="text-center text-sm font-semibold" style={{ color: active ? accentTextColor : theme.text }}>{unitLabel(unit)}</Text>
+                  <Typography className="text-center text-sm font-semibold" style={{ color: active ? accentTextColor : theme.text }}>{unitLabel(unit)}</Typography>
                 </Pressable>
               );
             })}
@@ -126,9 +127,12 @@ export default function ConfigRow({ item, accent, accentTextColor, theme, onChan
 
       {item.calcMode === 'pieces' ? (
         <View className="mt-1 rounded-xl border px-3 py-2" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
-          <Text className="text-xs" style={{ color: theme.muted }}>Se solicitará por piezas.</Text>
+          <Typography className="text-xs" style={{ color: theme.muted }}>Se solicitará por piezas.</Typography>
         </View>
       ) : null}
     </View>
   );
 }
+
+
+

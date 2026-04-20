@@ -1,4 +1,5 @@
-import { Pressable, Text, View } from 'react-native';
+import { Pressable, View } from 'react-native';
+import Typography from './Typography';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { calculateRequestedUnit, calculateRequestedValue, formatNumber } from '../utils/calculations';
 import type { AccentPreset, MaterialOption, MaterialCalcMode, MaterialUnit } from '../types/logistics';
@@ -55,29 +56,32 @@ export default function MaterialCard({
               <MaterialCommunityIcons name={categoryIcon(option.category)} size={18} color={selected ? accentTextColor : accent.color} />
             </View>
             <View className="flex-1">
-              <Text className="text-base font-semibold" style={{ color: theme.text }}>{option.title || 'Material sin nombre'}</Text>
-              <Text className="text-[13px] tracking-[0.05em]" style={{ color: theme.muted }}>{categoryLabel(option.category)}</Text>
+              <Typography className="text-base font-semibold" style={{ color: theme.text }}>{option.title || 'Material sin nombre'}</Typography>
+              <Typography className="text-[13px] tracking-[0.05em]" style={{ color: theme.muted }}>{categoryLabel(option.category)}</Typography>
             </View>
           </View>
 
           <View className="mt-2 flex-row flex-wrap gap-1.5">
             <View className="rounded-pill border px-2.5 py-1" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
-              <Text className="text-[13px] font-medium" style={{ color: theme.muted }}>{modeLabel(option.calcMode)}</Text>
+              <Typography className="text-[13px] font-medium" style={{ color: theme.muted }}>{modeLabel(option.calcMode)}</Typography>
             </View>
             <View className="rounded-pill border px-2.5 py-1" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
-              <Text className="text-[13px] font-medium" style={{ color: theme.muted }}>Unidad: {unitLabel(option.requestUnit)}</Text>
+              <Typography className="text-[13px] font-medium" style={{ color: theme.muted }}>Unidad: {unitLabel(option.requestUnit)}</Typography>
             </View>
           </View>
         </View>
 
         <View className="items-end">
-          <Text className="text-[13px] tracking-[0.06em]" style={{ color: theme.muted }}>{getResultLabel(option)}</Text>
-          <Text className="mt-1 text-2xl font-bold" style={{ color: theme.text }}>
+          <Typography className="text-[13px] tracking-[0.06em]" style={{ color: theme.muted }}>{getResultLabel(option)}</Typography>
+          <Typography className="mt-1 text-2xl font-bold" style={{ color: theme.text }}>
             {formatNumber(resultValue)}
-          </Text>
-          <Text className="text-xs font-medium" style={{ color: accent.soft }}>{unitLabel(resultUnit)}</Text>
+          </Typography>
+          <Typography className="text-xs font-medium" style={{ color: accent.soft }}>{unitLabel(resultUnit)}</Typography>
         </View>
       </View>
     </Pressable>
   );
 }
+
+
+

@@ -1,7 +1,8 @@
 import './global.css';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Image, StatusBar as RNStatusBar, Text, View } from 'react-native';
+import { Image, StatusBar as RNStatusBar, View } from 'react-native';
+import Typography from './src/components/Typography';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -36,8 +37,8 @@ function StartupLogo() {
             <Image source={require('./assets/logo.png')} style={{ width: 210, height: 210, borderRadius: 14 }} resizeMode="cover" />
           </View>
 
-          <Text className="mt-4 text-[13px] font-semibold tracking-[0.18em]" style={{ color: '#A9C4EA' }}>SURTITRACK</Text>
-          <Text className="mt-2 text-sm font-medium" style={{ color: '#EAF2FF' }}>Operación logística</Text>
+          <Typography className="mt-4 text-[13px] font-semibold tracking-[0.18em]" style={{ color: '#A9C4EA' }}>SURTITRACK</Typography>
+          <Typography className="mt-2 text-sm font-medium" style={{ color: '#EAF2FF' }}>Operación logística</Typography>
         </View>
       </View>
     </View>
@@ -143,8 +144,8 @@ export default function App() {
                 )}
               </View>
               <View>
-                <Text className="text-lg font-bold text-white" style={{ color: appText }}>{headerPreferences.appName}</Text>
-                <Text className="text-sm text-slate-400" style={{ color: appSubText }}>{headerPreferences.headerSubtitle}</Text>
+                <Typography className="text-lg font-bold text-white" style={{ color: appText }}>{headerPreferences.appName}</Typography>
+                <Typography className="text-sm text-slate-400" style={{ color: appSubText }}>{headerPreferences.headerSubtitle}</Typography>
               </View>
             </View>
           </View>
@@ -155,3 +156,6 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
+
+
+

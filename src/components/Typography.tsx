@@ -17,6 +17,7 @@ interface TypographyProps extends PropsWithChildren {
   align?: 'left' | 'center' | 'right';
   numberOfLines?: number;
   style?: TextProps['style'];
+  className?: string; // Aceptado pero ignorado (para compatibilidad)
 }
 
 const TYPOGRAPHY_STYLES = {
@@ -77,6 +78,7 @@ export default function Typography({
   tracking = 'normal',
   align = 'left',
   numberOfLines,
+  className,
   children,
   style,
 }: TypographyProps) {

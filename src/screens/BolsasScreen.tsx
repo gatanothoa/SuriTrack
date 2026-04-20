@@ -32,6 +32,8 @@ import {
 } from '../utils/calculations';
 import MaterialCard from '../components/MaterialCard';
 import ConfigRow from '../components/ConfigRow';
+import Typography from '../components/Typography';
+import CorporateButton from '../components/CorporateButton';
 import { persistLogoLocally, sendLogisticsEmail, stringToTemplateElements, templateElementsToString } from '../services/logisticsService';
 import { createBackupFile, readBackupFile } from '../services/backupService';
 import type {
@@ -1541,7 +1543,7 @@ export default function BolsasScreen({
       <View className="flex-1 items-center justify-center px-6" style={{ backgroundColor: theme.pageBg }}>
         <View className="items-center gap-4 rounded-ind border px-6 py-8" style={{ backgroundColor: theme.panelBg, borderColor: theme.border }}>
           <ActivityIndicator size="large" color={UI_COLORS.blue} />
-          <Text className="text-base font-semibold" style={{ color: theme.text }}>Cargando configuración...</Text>
+          <Typography variant="body" weight="semibold" color={theme.text}>Cargando configuración...</Typography>
         </View>
       </View>
     );
@@ -1560,7 +1562,7 @@ export default function BolsasScreen({
         {statusMessage ? (
           <View className="mb-4">
             <View className={`rounded-xl border px-4 py-3 ${statusType === 'error' ? 'border-corporate-error bg-corporate-error/10' : 'border-corporate-primary/20'}`} style={{ backgroundColor: theme.panelAltBg }}>
-              <Text className="text-sm font-medium" style={{ color: statusType === 'error' ? UI_COLORS.danger : accent.color }}>{statusMessage}</Text>
+              <Typography variant="body" weight="medium" color={statusType === 'error' ? UI_COLORS.danger : accent.color}>{statusMessage}</Typography>
             </View>
           </View>
         ) : null}
@@ -1568,8 +1570,8 @@ export default function BolsasScreen({
         <Animated.View className="mb-5 rounded-2xl border px-5 py-5 shadow-sm" style={[{ backgroundColor: theme.panelBg, borderColor: theme.border }, getSectionEntryStyle(0)]}>
           <View className="flex-row items-center justify-between">
             <View className="flex-1 pr-3">
-              <Text className="text-[13px] uppercase tracking-[0.14em]" style={{ color: theme.muted }}>{preferences.appName}</Text>
-              <Text className="mt-1 text-2xl font-bold" style={{ color: theme.text }}>{preferences.headerSubtitle}</Text>
+              <Typography variant="caption" color={theme.muted} tracking="wide">{preferences.appName}</Typography>
+              <Typography variant="h1" weight="bold" color={theme.text} style={{ marginTop: 4 }}>{preferences.headerSubtitle}</Typography>
             </View>
             <View className="items-center justify-center rounded-xl border px-3 py-3" style={{ borderColor: theme.border, backgroundColor: theme.panelAltBg }}>
               {effectiveSavedLogoSource ? (
@@ -1579,34 +1581,34 @@ export default function BolsasScreen({
               )}
             </View>
           </View>
-          <Text className="mt-2 text-sm" style={{ color: theme.muted }}>
+          <Typography variant="body" color={theme.muted} style={{ marginTop: 8 }}>
             {preferences.emailNote}
-          </Text>
+          </Typography>
         </Animated.View>
 
         <Animated.View className="mb-5 rounded-2xl border px-4 py-4 shadow-sm" style={[{ backgroundColor: theme.panelBg, borderColor: theme.border }, getSectionEntryStyle(0)]}>
           <View className="flex-row flex-wrap gap-2">
             <View className="min-w-[31%] flex-1 rounded-xl border px-3 py-2" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
-              <Text className="text-[11px] tracking-[0.05em]" style={{ color: theme.muted }}>Catálogo</Text>
-              <Text className="mt-1 text-lg font-bold" style={{ color: theme.text }}>{currentMaterials.length}</Text>
-              <Text className="text-xs" style={{ color: theme.muted }}>{categoryLabelForUi(selectedCategory)}</Text>
+              <Typography variant="caption" color={theme.muted} tracking="tight">Catálogo</Typography>
+              <Typography variant="h2" weight="bold" color={theme.text} style={{ marginTop: 4 }}>{currentMaterials.length}</Typography>
+              <Typography variant="caption" color={theme.muted}>{categoryLabelForUi(selectedCategory)}</Typography>
             </View>
             <View className="min-w-[31%] flex-1 rounded-xl border px-3 py-2" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
-              <Text className="text-[11px] tracking-[0.05em]" style={{ color: theme.muted }}>En curso</Text>
-              <Text className="mt-1 text-lg font-bold" style={{ color: theme.text }}>{requestSummary.materials}</Text>
-              <Text className="text-xs" style={{ color: theme.muted }}>Materiales</Text>
+              <Typography variant="caption" color={theme.muted} tracking="tight">En curso</Typography>
+              <Typography variant="h2" weight="bold" color={theme.text} style={{ marginTop: 4 }}>{requestSummary.materials}</Typography>
+              <Typography variant="caption" color={theme.muted}>Materiales</Typography>
             </View>
             <View className="min-w-[31%] flex-1 rounded-xl border px-3 py-2" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
-              <Text className="text-[11px] tracking-[0.05em]" style={{ color: theme.muted }}>Kg programados</Text>
-              <Text className="mt-1 text-lg font-bold" style={{ color: theme.text }}>{formatNumber(requestSummary.totalKg)}</Text>
-              <Text className="text-xs" style={{ color: theme.muted }}>Acumulado</Text>
+              <Typography variant="caption" color={theme.muted} tracking="tight">Kg programados</Typography>
+              <Typography variant="h2" weight="bold" color={theme.text} style={{ marginTop: 4 }}>{formatNumber(requestSummary.totalKg)}</Typography>
+              <Typography variant="caption" color={theme.muted}>Acumulado</Typography>
             </View>
           </View>
         </Animated.View>
 
         <Animated.View style={getCategoryTransitionStyle()}>
         <View className="mb-3">
-          <Text className="mb-2 text-sm font-semibold tracking-[0.06em]" style={{ color: theme.muted }}>Tipo de material</Text>
+          <Typography variant="body" weight="semibold" color={theme.muted} tracking="wide" style={{ marginBottom: 8 }}>Tipo de material</Typography>
           <View className="flex-row gap-2">
             {CATEGORIES.map((category) => {
               const active = category.key === selectedCategory;
@@ -1626,9 +1628,9 @@ export default function BolsasScreen({
                     <View className="h-6 w-6 items-center justify-center rounded border" style={{ borderColor: active ? accentTextColor : theme.border }}>
                       <MaterialCommunityIcons name={category.icon} size={18} color={active ? accentTextColor : UI_COLORS.blue} />
                     </View>
-                    <Text className="text-center text-sm font-semibold" style={{ color: active ? accentTextColor : theme.text }}>
+                    <Typography variant="body" weight="semibold" color={active ? accentTextColor : theme.text} align="center">
                       {categoryLabelForUi(category.key)}
-                    </Text>
+                    </Typography>
                   </View>
                 </Pressable>
               );
@@ -1638,11 +1640,11 @@ export default function BolsasScreen({
 
         <View className="mb-4 rounded-2xl border px-4 py-4 shadow-sm" style={{ backgroundColor: theme.panelBg, borderColor: theme.border }}>
           <View className="mb-3 flex-row items-center justify-between">
-            <Text className="text-sm font-semibold tracking-[0.06em]" style={{ color: theme.muted }}>Alta de material</Text>
-            <Text className="text-xs" style={{ color: theme.muted }}>{categoryLabelForUi(selectedCategory)}</Text>
+            <Typography className="text-sm font-semibold tracking-[0.06em]" style={{ color: theme.muted }}>Alta de material</Typography>
+            <Typography className="text-xs" style={{ color: theme.muted }}>{categoryLabelForUi(selectedCategory)}</Typography>
           </View>
 
-          <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Nombre</Text>
+          <Typography className="mb-1 text-xs" style={{ color: theme.muted }}>Nombre</Typography>
           <TextInput
             value={drafts[selectedCategory].title}
             onChangeText={(value) =>
@@ -1665,7 +1667,7 @@ export default function BolsasScreen({
 
           {selectedCategory === 'bolsas' ? (
             <>
-              <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Unidad base del peso</Text>
+              <Typography className="mb-1 text-xs" style={{ color: theme.muted }}>Unidad base del peso</Typography>
               <View className="mb-3 flex-row gap-2">
                 <Pressable
                   onPress={() =>
@@ -1678,9 +1680,9 @@ export default function BolsasScreen({
                   className="flex-1 min-h-[44px] items-center justify-center rounded-xl border px-3 py-3"
                   style={drafts.bolsas.weightUnit === 'g' ? { backgroundColor: accent.color, borderColor: accent.border } : { backgroundColor: theme.panelAltBg, borderColor: theme.border }}
                 >
-                  <Text className="text-center text-sm font-semibold" style={{ color: drafts.bolsas.weightUnit === 'g' ? accentTextColor : theme.text }}>
+                  <Typography className="text-center text-sm font-semibold" style={{ color: drafts.bolsas.weightUnit === 'g' ? accentTextColor : theme.text }}>
                     Gramos
-                  </Text>
+                  </Typography>
                 </Pressable>
                 <Pressable
                   onPress={() =>
@@ -1693,13 +1695,13 @@ export default function BolsasScreen({
                     className="flex-1 min-h-[44px] items-center justify-center rounded-xl border px-3 py-3"
                     style={drafts.bolsas.weightUnit === 'kg' ? { backgroundColor: accent.color, borderColor: accent.border } : { backgroundColor: theme.panelAltBg, borderColor: theme.border }}
                 >
-                    <Text className="text-center text-sm font-semibold" style={{ color: drafts.bolsas.weightUnit === 'kg' ? accentTextColor : theme.text }}>
+                    <Typography className="text-center text-sm font-semibold" style={{ color: drafts.bolsas.weightUnit === 'kg' ? accentTextColor : theme.text }}>
                     Kilogramos
-                  </Text>
+                  </Typography>
                 </Pressable>
               </View>
 
-              <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Peso por 100 piezas ({drafts.bolsas.weightUnit})</Text>
+              <Typography className="mb-1 text-xs" style={{ color: theme.muted }}>Peso por 100 piezas ({drafts.bolsas.weightUnit})</Typography>
               <TextInput
                 value={drafts.bolsas.weightInput}
                 onChangeText={(value) =>
@@ -1719,13 +1721,13 @@ export default function BolsasScreen({
 
           {selectedCategory === 'cajas' ? (
             <View className="rounded-ind border px-3 py-3" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
-              <Text className="text-sm" style={{ color: theme.text }}>Las cajas se solicitarán directamente por piezas.</Text>
+              <Typography className="text-sm" style={{ color: theme.text }}>Las cajas se solicitarán directamente por piezas.</Typography>
             </View>
           ) : null}
 
           {selectedCategory === 'otros' ? (
             <>
-              <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Unidad de solicitud</Text>
+              <Typography className="mb-1 text-xs" style={{ color: theme.muted }}>Unidad de solicitud</Typography>
               <View className="flex-row gap-2">
                 {(['l', 'kg', 'g'] as const).map((unit) => {
                   const active = drafts.otros.otherUnit === unit;
@@ -1743,9 +1745,9 @@ export default function BolsasScreen({
                         className="flex-1 min-h-[44px] items-center justify-center rounded-xl border px-3 py-3"
                         style={active ? { backgroundColor: accent.color, borderColor: accent.border } : { backgroundColor: theme.panelAltBg, borderColor: theme.border }}
                     >
-                        <Text className="text-center text-sm font-semibold" style={{ color: active ? accentTextColor : theme.text }}>
+                        <Typography className="text-center text-sm font-semibold" style={{ color: active ? accentTextColor : theme.text }}>
                         {unitLabel(unit)}
-                      </Text>
+                      </Typography>
                     </Pressable>
                   );
                 })}
@@ -1762,17 +1764,17 @@ export default function BolsasScreen({
             ]}
           >
             <View className="flex-row items-center justify-center gap-2">
-              <Text className="text-center text-sm font-semibold" style={{ color: accentTextColor }} numberOfLines={2}>
+              <Typography className="text-center text-sm font-semibold" style={{ color: accentTextColor }} numberOfLines={2}>
                 Agregar material en {categoryLabelForUi(selectedCategory)}
-              </Text>
+              </Typography>
             </View>
           </Pressable>
         </View>
 
         {currentMaterials.length === 0 ? (
           <View className="mb-4 rounded-xl border px-4 py-5" style={{ backgroundColor: theme.panelBg, borderColor: theme.border }}>
-            <Text className="text-sm font-medium" style={{ color: theme.text }}>No hay materiales en {categoryLabelForUi(selectedCategory)}.</Text>
-            <Text className="mt-1 text-xs" style={{ color: theme.muted }}>Agrega uno desde la sección superior para comenzar la solicitud.</Text>
+            <Typography className="text-sm font-medium" style={{ color: theme.text }}>No hay materiales en {categoryLabelForUi(selectedCategory)}.</Typography>
+            <Typography className="mt-1 text-xs" style={{ color: theme.muted }}>Agrega uno desde la sección superior para comenzar la solicitud.</Typography>
           </View>
         ) : null}
 
@@ -1794,9 +1796,9 @@ export default function BolsasScreen({
         ))}
 
         <View className="mt-3 rounded-2xl border px-4 py-4 shadow-sm" style={{ backgroundColor: theme.panelBg, borderColor: theme.border }}>
-          <Text className="mb-2 text-sm font-semibold tracking-[0.06em]" style={{ color: theme.muted }}>
+          <Typography className="mb-2 text-sm font-semibold tracking-[0.06em]" style={{ color: theme.muted }}>
             {selectedMaterial ? getInputLabel(selectedMaterial) : 'Cantidad'}
-          </Text>
+          </Typography>
           <TextInput
             value={selectedMaterial ? String(selectedMaterial.requestValue || '') : ''}
             onChangeText={(value) => {
@@ -1819,24 +1821,24 @@ export default function BolsasScreen({
             className={`rounded-ind border px-4 py-3 text-xl font-semibold ${selectedMaterial && !isNonEmptyPositive(selectedMaterial.requestValue) ? 'border-corporate-error bg-corporate-error/10' : ''}`}
             style={{ backgroundColor: theme.inputBg, borderColor: selectedMaterial && !isNonEmptyPositive(selectedMaterial.requestValue) ? UI_COLORS.danger : theme.inputBorder, color: theme.text }}
           />
-          <Text className="mt-2 text-xs" style={{ color: theme.muted }}>
+          <Typography className="mt-2 text-xs" style={{ color: theme.muted }}>
             Captura el dato base y el sistema calcula automáticamente el resultado.
-          </Text>
+          </Typography>
         </View>
 
         <View className="mt-4 rounded-2xl border px-5 py-6 shadow-sm" style={{ backgroundColor: theme.panelBg, borderColor: theme.border }}>
-          <Text className="text-center text-[13px] font-semibold tracking-[0.12em]" style={{ color: theme.muted }}>
+          <Typography className="text-center text-[13px] font-semibold tracking-[0.12em]" style={{ color: theme.muted }}>
             {selectedMaterial ? getResultLabel(selectedMaterial) : 'Resultado'}
-          </Text>
-          <Text className="mt-2 text-center text-4xl font-bold" style={{ color: theme.text }}>
+          </Typography>
+          <Typography className="mt-2 text-center text-4xl font-bold" style={{ color: theme.text }}>
             {selectedMaterial ? formatNumber(selectedResultValue) : '0.000'}
-          </Text>
-          <Text className="mt-1 text-center text-xs" style={{ color: accent.soft }}>
+          </Typography>
+          <Typography className="mt-1 text-center text-xs" style={{ color: accent.soft }}>
             {selectedMaterial ? unitLabel(selectedResultUnit) : 'Selecciona o crea un material'}
-          </Text>
-          <Text className="mt-2 text-center text-xs" style={{ color: theme.muted }}>
+          </Typography>
+          <Typography className="mt-2 text-center text-xs" style={{ color: theme.muted }}>
             {selectedMaterial ? `Categoría activa: ${categoryLabelForUi(selectedMaterial.category)} · ${selectedMaterial.title}` : 'Sin material seleccionado'}
-          </Text>
+          </Typography>
         </View>
 
         <Pressable
@@ -1849,7 +1851,7 @@ export default function BolsasScreen({
           hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
         >
           <View className="flex-row items-center justify-center gap-2">
-            <Text className="text-center text-sm font-bold" style={{ color: accentTextColor }}>Agregar a la solicitud</Text>
+            <Typography className="text-center text-sm font-bold" style={{ color: accentTextColor }}>Agregar a la solicitud</Typography>
           </View>
         </Pressable>
         </Animated.View>
@@ -1861,17 +1863,17 @@ export default function BolsasScreen({
                 <MaterialCommunityIcons name="clipboard-list-outline" size={16} color={UI_COLORS.blue} />
               </View>
               <View>
-                <Text className="text-xl font-semibold" style={{ color: theme.text }}>Resumen de solicitud</Text>
-                <Text className="mt-1 text-xs" style={{ color: theme.muted }}>Control operativo previo al envío</Text>
+                <Typography className="text-xl font-semibold" style={{ color: theme.text }}>Resumen de solicitud</Typography>
+                <Typography className="mt-1 text-xs" style={{ color: theme.muted }}>Control operativo previo al envío</Typography>
               </View>
             </View>
             <View className="items-end gap-1">
               <View className="rounded-pill border px-2.5 py-1" style={{ borderColor: theme.border, backgroundColor: theme.panelAltBg }}>
-                <Text className="text-[11px]" style={{ color: theme.muted }}>Próximo folio: {buildRequestCode(preferences.folioPrefix, nextLeadNumber)}</Text>
+                <Typography className="text-[11px]" style={{ color: theme.muted }}>Próximo folio: {buildRequestCode(preferences.folioPrefix, nextLeadNumber)}</Typography>
               </View>
-              <Text className="text-xs" style={{ color: theme.muted }}>
+              <Typography className="text-xs" style={{ color: theme.muted }}>
                 {formatNumber(requestSummary.totalPieces)} pzas · {formatNumber(requestSummary.totalKg)} kg
-              </Text>
+              </Typography>
             </View>
           </View>
 
@@ -1881,7 +1883,7 @@ export default function BolsasScreen({
                 <View className="h-4 w-4 items-center justify-center rounded border" style={{ borderColor: theme.border }}>
                   <MaterialCommunityIcons name="email-fast-outline" size={10} color={UI_COLORS.blue} />
                 </View>
-                <Text className="text-xs font-semibold tracking-[0.06em]" style={{ color: theme.muted }}>Destino de envío</Text>
+                <Typography className="text-xs font-semibold tracking-[0.06em]" style={{ color: theme.muted }}>Destino de envío</Typography>
               </View>
               <TextInput
                 value={recipientEmail}
@@ -1893,22 +1895,22 @@ export default function BolsasScreen({
                 className={`rounded-ind border px-3 py-3 ${recipientEmail.trim().length > 0 && !isValidEmail(recipientEmail) ? 'border-corporate-error bg-corporate-error/10' : ''}`}
                 style={{ backgroundColor: theme.inputBg, borderColor: recipientEmail.trim().length > 0 && !isValidEmail(recipientEmail) ? UI_COLORS.danger : theme.inputBorder, color: theme.text }}
               />
-              <Text className="mt-2 text-xs" style={{ color: recipientEmail.trim().length === 0 || isValidEmail(recipientEmail) ? theme.muted : UI_COLORS.danger }}>
+              <Typography className="mt-2 text-xs" style={{ color: recipientEmail.trim().length === 0 || isValidEmail(recipientEmail) ? theme.muted : UI_COLORS.danger }}>
                 {recipientEmail.trim().length === 0
                   ? 'Este correo se usa para enviar el resumen y queda guardado localmente.'
                   : isValidEmail(recipientEmail)
                     ? 'Correo válido para envío.'
                     : 'Formato de correo no válido.'}
-              </Text>
+              </Typography>
             </View>
 
             {cartItems.length === 0 ? (
               <View className="rounded-xl border border-dashed px-4 py-5" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
                 <View className="flex-row items-center gap-2">
                   <MaterialCommunityIcons name="tray-minus" size={16} color={theme.muted} />
-                  <Text className="text-sm font-medium" style={{ color: theme.text }}>No hay materiales en el resumen.</Text>
+                  <Typography className="text-sm font-medium" style={{ color: theme.text }}>No hay materiales en el resumen.</Typography>
                 </View>
-                <Text className="mt-1 text-xs" style={{ color: theme.muted }}>Agrega materiales para habilitar el envío.</Text>
+                <Typography className="mt-1 text-xs" style={{ color: theme.muted }}>Agrega materiales para habilitar el envío.</Typography>
               </View>
             ) : (
               cartItems.map((item) => (
@@ -1916,10 +1918,10 @@ export default function BolsasScreen({
                   <View className="gap-3">
                     <View className="flex-row items-start justify-between gap-2">
                       <View className="flex-1 pr-2">
-                        <Text className="text-sm font-semibold" style={{ color: theme.text }}>{item.materialTitle}</Text>
-                        <Text className="text-[13px]" style={{ color: theme.muted }}>
+                        <Typography className="text-sm font-semibold" style={{ color: theme.text }}>{item.materialTitle}</Typography>
+                        <Typography className="text-[13px]" style={{ color: theme.muted }}>
                           {categoryLabelForUi(item.category)} · {modeLabel(item.calcMode)}
-                        </Text>
+                        </Typography>
                       </View>
                       <Pressable
                         onPress={() => removeCartItem(item.id)}
@@ -1927,18 +1929,18 @@ export default function BolsasScreen({
                         className="min-h-10 min-w-10 items-center justify-center rounded-ind border px-3 py-2"
                         style={({ pressed }) => [{ borderColor: accent.border }, pressed ? { opacity: 0.82 } : undefined]}
                       >
-                        <Text className="text-[12px] font-semibold" style={{ color: theme.text }}>Quitar</Text>
+                        <Typography className="text-[12px] font-semibold" style={{ color: theme.text }}>Quitar</Typography>
                       </Pressable>
                     </View>
 
                     <View className="flex-row flex-wrap gap-3">
                       <View className="rounded-ind border px-2 py-1" style={{ borderColor: theme.border }}>
-                        <Text className="text-[11px] tracking-[0.04em]" style={{ color: theme.muted }}>Capturado</Text>
-                        <Text className="text-sm font-semibold" style={{ color: theme.text }}>{formatNumber(item.requestValue)}</Text>
+                        <Typography className="text-[11px] tracking-[0.04em]" style={{ color: theme.muted }}>Capturado</Typography>
+                        <Typography className="text-sm font-semibold" style={{ color: theme.text }}>{formatNumber(item.requestValue)}</Typography>
                       </View>
                       <View className="rounded-ind border px-2 py-1" style={{ borderColor: theme.border }}>
-                        <Text className="text-[11px] tracking-[0.04em]" style={{ color: theme.muted }}>Resultado</Text>
-                        <Text className="text-sm font-semibold" style={{ color: theme.text }}>{formatNumber(item.calculatedValue)}</Text>
+                        <Typography className="text-[11px] tracking-[0.04em]" style={{ color: theme.muted }}>Resultado</Typography>
+                        <Typography className="text-sm font-semibold" style={{ color: theme.text }}>{formatNumber(item.calculatedValue)}</Typography>
                       </View>
                     </View>
                   </View>
@@ -1953,7 +1955,7 @@ export default function BolsasScreen({
                 className="flex-1 min-h-[46px] items-center justify-center rounded-ind border px-3 py-3"
                 style={{ borderColor: theme.border, backgroundColor: theme.panelAltBg }}
               >
-                <Text className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>Vaciar solicitud</Text>
+                <Typography className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>Vaciar solicitud</Typography>
               </Pressable>
               <Pressable
                 disabled={!canSendEmail}
@@ -1964,9 +1966,9 @@ export default function BolsasScreen({
                 className="flex-1 min-h-[46px] items-center justify-center rounded-ind border px-3 py-3"
                 style={canSendEmail ? { backgroundColor: accent.color, borderColor: accent.border } : { backgroundColor: theme.panelAltBg, borderColor: theme.border, opacity: 0.72 }}
               >
-                <Text className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: canSendEmail ? accentTextColor : theme.text }}>
+                <Typography className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: canSendEmail ? accentTextColor : theme.text }}>
                   {isSendingEmail ? 'Enviando...' : 'Enviar solicitud'}
-                </Text>
+                </Typography>
               </Pressable>
             </View>
           </View>
@@ -1978,11 +1980,11 @@ export default function BolsasScreen({
               <View className="h-5 w-5 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
                 <MaterialCommunityIcons name="tune-variant" size={12} color={accent.color} />
               </View>
-              <Text className="text-base font-semibold" style={{ color: theme.text }}>Personalización de app</Text>
+              <Typography className="text-base font-semibold" style={{ color: theme.text }}>Personalización de app</Typography>
             </View>
-            <Text className="text-base font-bold" style={{ color: theme.muted }}>{settingsOpen ? '˄' : '˅'}</Text>
+            <Typography className="text-base font-bold" style={{ color: theme.muted }}>{settingsOpen ? '˄' : '˅'}</Typography>
           </Pressable>
-          <Text className="mt-1 text-xs" style={{ color: theme.muted }}>Marca, respaldo, plantilla y configuración visual</Text>
+          <Typography className="mt-1 text-xs" style={{ color: theme.muted }}>Marca, respaldo, plantilla y configuración visual</Typography>
 
           {renderSettingsPanel ? (
             <Animated.View className="mt-4 overflow-hidden" style={getSettingsPanelStyle()}>
@@ -1991,15 +1993,15 @@ export default function BolsasScreen({
                   <View className="h-4 w-4 items-center justify-center rounded border" style={{ borderColor: theme.border }}>
                     <MaterialCommunityIcons name="palette-outline" size={10} color={accent.color} />
                   </View>
-                  <Text className="text-xs font-semibold tracking-[0.06em]" style={{ color: theme.muted }}>Configuración general</Text>
+                  <Typography className="text-xs font-semibold tracking-[0.06em]" style={{ color: theme.muted }}>Configuración general</Typography>
                 </View>
-                <Text className="mb-3 text-xs" style={{ color: theme.muted }}>Ajusta marca, plantilla y operación en bloques independientes.</Text>
+                <Typography className="mb-3 text-xs" style={{ color: theme.muted }}>Ajusta marca, plantilla y operación en bloques independientes.</Typography>
 
                 <View className="mb-3 rounded-xl border px-3 py-2" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
-                  <Text className="text-[11px] font-semibold tracking-[0.08em]" style={{ color: theme.muted }}>Marca y encabezado</Text>
+                  <Typography className="text-[11px] font-semibold tracking-[0.08em]" style={{ color: theme.muted }}>Marca y encabezado</Typography>
                 </View>
 
-                <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Nombre visible de la app</Text>
+                <Typography className="mb-1 text-xs" style={{ color: theme.muted }}>Nombre visible de la app</Typography>
                 <TextInput
                   value={draftPreferences.appName}
                   onChangeText={(value) =>
@@ -2014,7 +2016,7 @@ export default function BolsasScreen({
                   style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }}
                 />
 
-                <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Subtítulo del encabezado</Text>
+                <Typography className="mb-1 text-xs" style={{ color: theme.muted }}>Subtítulo del encabezado</Typography>
                 <TextInput
                   value={draftPreferences.headerSubtitle}
                   onChangeText={(value) =>
@@ -2029,7 +2031,7 @@ export default function BolsasScreen({
                   style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }}
                 />
 
-                <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Nombre del botón Bolsas</Text>
+                <Typography className="mb-1 text-xs" style={{ color: theme.muted }}>Nombre del botón Bolsas</Typography>
                 <TextInput
                   value={draftPreferences.categoryDisplayNames.bolsas}
                   onChangeText={(value) =>
@@ -2047,7 +2049,7 @@ export default function BolsasScreen({
                   style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }}
                 />
 
-                <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Nombre del botón Cajas</Text>
+                <Typography className="mb-1 text-xs" style={{ color: theme.muted }}>Nombre del botón Cajas</Typography>
                 <TextInput
                   value={draftPreferences.categoryDisplayNames.cajas}
                   onChangeText={(value) =>
@@ -2065,7 +2067,7 @@ export default function BolsasScreen({
                   style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }}
                 />
 
-                <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Nombre del botón Otros</Text>
+                <Typography className="mb-1 text-xs" style={{ color: theme.muted }}>Nombre del botón Otros</Typography>
                 <TextInput
                   value={draftPreferences.categoryDisplayNames.otros}
                   onChangeText={(value) =>
@@ -2083,7 +2085,7 @@ export default function BolsasScreen({
                   style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }}
                 />
 
-                <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Modo visual</Text>
+                <Typography className="mb-1 text-xs" style={{ color: theme.muted }}>Modo visual</Typography>
                 <View className="mb-3 flex-row gap-2">
                   {(() => {
                     const darkModeActive = draftPreferences.themeMode === 'dark';
@@ -2105,9 +2107,9 @@ export default function BolsasScreen({
                       borderColor: darkModeActive ? accent.border : theme.border,
                     }}
                   >
-                    <Text className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: darkModeActive ? accentTextColor : theme.text }}>
+                    <Typography className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: darkModeActive ? accentTextColor : theme.text }}>
                       Modo oscuro
-                    </Text>
+                    </Typography>
                   </Pressable>
                   <Pressable
                     onPress={() =>
@@ -2123,16 +2125,16 @@ export default function BolsasScreen({
                       borderColor: lightModeActive ? accent.border : theme.border,
                     }}
                   >
-                    <Text className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: lightModeActive ? accentTextColor : theme.text }}>
+                    <Typography className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: lightModeActive ? accentTextColor : theme.text }}>
                       Modo claro
-                    </Text>
+                    </Typography>
                   </Pressable>
                       </>
                     );
                   })()}
                 </View>
 
-                <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Prefijo del folio</Text>
+                <Typography className="mb-1 text-xs" style={{ color: theme.muted }}>Prefijo del folio</Typography>
                 <TextInput
                   value={draftPreferences.folioPrefix}
                   onChangeText={(value) =>
@@ -2147,14 +2149,14 @@ export default function BolsasScreen({
                   style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }}
                 />
                 <View className="mb-3 rounded-xl border px-3 py-3" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
-                  <Text className="text-[13px] tracking-[0.08em]" style={{ color: theme.muted }}>Vista de folio</Text>
-                  <Text className="mt-1 text-base font-semibold" style={{ color: theme.text }}>
+                  <Typography className="text-[13px] tracking-[0.08em]" style={{ color: theme.muted }}>Vista de folio</Typography>
+                  <Typography className="mt-1 text-base font-semibold" style={{ color: theme.text }}>
                     {buildRequestCode(draftPreferences.folioPrefix, nextLeadNumber)}
-                  </Text>
-                  <Text className="mt-1 text-xs" style={{ color: theme.muted }}>Prefijo permitido: A-Z, 0-9 y guion (máx. 8).</Text>
+                  </Typography>
+                  <Typography className="mt-1 text-xs" style={{ color: theme.muted }}>Prefijo permitido: A-Z, 0-9 y guion (máx. 8).</Typography>
                 </View>
 
-                <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Texto al pie del correo</Text>
+                <Typography className="mb-1 text-xs" style={{ color: theme.muted }}>Texto al pie del correo</Typography>
                 <TextInput
                   value={draftPreferences.emailNote}
                   onChangeText={(value) =>
@@ -2170,10 +2172,10 @@ export default function BolsasScreen({
                 />
 
                 <View className="mb-3 rounded-xl border px-3 py-2" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
-                  <Text className="text-[11px] font-semibold tracking-[0.08em]" style={{ color: theme.muted }}>Plantilla y comunicación</Text>
+                  <Typography className="text-[11px] font-semibold tracking-[0.08em]" style={{ color: theme.muted }}>Plantilla y comunicación</Typography>
                 </View>
 
-                <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Machote del correo</Text>
+                <Typography className="mb-1 text-xs" style={{ color: theme.muted }}>Machote del correo</Typography>
                 <TextInput
                   value={templateEditorValue}
                   onChangeText={updateTemplateFromText}
@@ -2185,11 +2187,11 @@ export default function BolsasScreen({
                   className="mb-2 min-h-[170px] rounded-xl border px-3 py-3"
                   style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }}
                 />
-                <Text className="mb-3 text-xs" style={{ color: theme.muted }}>
+                <Typography className="mb-3 text-xs" style={{ color: theme.muted }}>
                   Variables: {'{logo}'} {'{greeting}'} {'{folio}'} {'{materialTable}'} {'{requestDate}'} {'{totalKg}'} {'{attachmentNote}'} {'{emailNote}'}
-                </Text>
+                </Typography>
 
-                <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Texto para Excel</Text>
+                <Typography className="mb-1 text-xs" style={{ color: theme.muted }}>Texto para Excel</Typography>
                   <TextInput
                     value={draftPreferences.sheetNote}
                     onChangeText={(value) =>
@@ -2207,13 +2209,13 @@ export default function BolsasScreen({
                       style={{ backgroundColor: theme.inputBg, borderColor: theme.inputBorder, color: theme.text }}
                   />
 
-                <Text className="mb-1 text-xs" style={{ color: theme.muted }}>Logo de la empresa</Text>
-                <Text className="mb-3 text-xs" style={{ color: theme.muted }}>
+                <Typography className="mb-1 text-xs" style={{ color: theme.muted }}>Logo de la empresa</Typography>
+                <Typography className="mb-3 text-xs" style={{ color: theme.muted }}>
                     Carga el logo desde la galería del dispositivo. La app lo guarda en local al presionar guardar.
-                  </Text>
+                  </Typography>
 
                   <View className="mb-3 rounded-xl border px-3 py-2" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
-                    <Text className="text-[11px] font-semibold tracking-[0.08em]" style={{ color: theme.muted }}>Identidad visual</Text>
+                    <Typography className="text-[11px] font-semibold tracking-[0.08em]" style={{ color: theme.muted }}>Identidad visual</Typography>
                   </View>
 
                   <View className="mb-3 flex-row gap-2">
@@ -2226,9 +2228,9 @@ export default function BolsasScreen({
                       pressed ? { opacity: 0.86, transform: [{ scale: 0.995 }] } : undefined,
                     ]}
                   >
-                    <Text className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>
+                    <Typography className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>
                         Cargar desde galería
-                      </Text>
+                      </Typography>
                     </Pressable>
                     <Pressable
                       onPress={() =>
@@ -2248,14 +2250,14 @@ export default function BolsasScreen({
                         pressed ? { opacity: 0.86, transform: [{ scale: 0.995 }] } : undefined,
                       ]}
                     >
-                      <Text className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>
+                      <Typography className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>
                         Quitar logo
-                      </Text>
+                      </Typography>
                     </Pressable>
                   </View>
 
                   <View className="mb-4 rounded-xl border px-4 py-4" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
-                    <Text className="mb-2 text-[13px] tracking-[0.08em]" style={{ color: theme.muted }}>Vista previa</Text>
+                    <Typography className="mb-2 text-[13px] tracking-[0.08em]" style={{ color: theme.muted }}>Vista previa</Typography>
                     <View className="flex-row items-center gap-3">
                       <View className="h-14 w-14 items-center justify-center rounded-ind overflow-hidden" style={{ backgroundColor: theme.panelAltBg }}>
                         {effectiveDraftLogoPreviewSource ? (
@@ -2265,22 +2267,22 @@ export default function BolsasScreen({
                         )}
                       </View>
                       <View className="flex-1">
-                        <Text className="text-sm font-semibold" style={{ color: theme.text }}>{draftPreferences.logoLabel || 'Sin logo cargado'}</Text>
-                        <Text className="mt-1 text-xs" style={{ color: theme.muted }}>
+                        <Typography className="text-sm font-semibold" style={{ color: theme.text }}>{draftPreferences.logoLabel || 'Sin logo cargado'}</Typography>
+                        <Typography className="mt-1 text-xs" style={{ color: theme.muted }}>
                           {effectiveDraftLogoPreviewSource ? 'Se usará en app, correo y exportación cuando guardes.' : 'Todavía no hay un logo personalizado.'}
-                        </Text>
+                        </Typography>
                       </View>
                     </View>
                   </View>
 
                   <View className="mb-4 rounded-xl border px-4 py-4" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
                     <View className="mb-2 rounded-xl border px-3 py-2" style={{ backgroundColor: theme.panelBg, borderColor: theme.border }}>
-                      <Text className="text-[11px] font-semibold tracking-[0.08em]" style={{ color: theme.muted }}>Datos operativos</Text>
+                      <Typography className="text-[11px] font-semibold tracking-[0.08em]" style={{ color: theme.muted }}>Datos operativos</Typography>
                     </View>
-                    <Text className="mb-2 text-[13px] tracking-[0.08em]" style={{ color: theme.muted }}>Base de materiales</Text>
-                    <Text className="mb-3 text-xs" style={{ color: theme.muted }}>
+                    <Typography className="mb-2 text-[13px] tracking-[0.08em]" style={{ color: theme.muted }}>Base de materiales</Typography>
+                    <Typography className="mb-3 text-xs" style={{ color: theme.muted }}>
                       Importa Excel/CSV con columnas: categoria, titulo, modo, unidad_solicitud, peso_por_100, unidad_peso.
-                    </Text>
+                    </Typography>
                     <Pressable
                       onPress={() => void importMaterialsDatabase()}
                       hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
@@ -2290,17 +2292,17 @@ export default function BolsasScreen({
                         pressed ? { opacity: 0.86, transform: [{ scale: 0.995 }] } : undefined,
                       ]}
                     >
-                      <Text className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>
+                      <Typography className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>
                         Importar base desde Excel/CSV
-                      </Text>
+                      </Typography>
                     </Pressable>
                   </View>
 
                   <View className="mb-4 rounded-xl border px-4 py-4" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
-                    <Text className="mb-2 text-[13px] tracking-[0.08em]" style={{ color: theme.muted }}>Respaldo en nube (JSON)</Text>
-                    <Text className="mb-3 text-xs" style={{ color: theme.muted }}>
+                    <Typography className="mb-2 text-[13px] tracking-[0.08em]" style={{ color: theme.muted }}>Respaldo en nube (JSON)</Typography>
+                    <Typography className="mb-3 text-xs" style={{ color: theme.muted }}>
                       Genera un respaldo JSON y súbelo a Drive, OneDrive o iCloud desde compartir.
-                    </Text>
+                    </Typography>
                     <View className="flex-row gap-2">
                       <Pressable
                         onPress={() => void createCloudBackup()}
@@ -2313,9 +2315,9 @@ export default function BolsasScreen({
                           pressed && !(isCreatingBackup || isRestoringBackup) ? { opacity: 0.86, transform: [{ scale: 0.995 }] } : undefined,
                         ]}
                       >
-                        <Text className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>
+                        <Typography className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>
                           {isCreatingBackup ? 'Generando...' : 'Crear respaldo'}
-                        </Text>
+                        </Typography>
                       </Pressable>
                       <Pressable
                         onPress={() => void restoreFromBackup()}
@@ -2328,27 +2330,27 @@ export default function BolsasScreen({
                           pressed && !(isCreatingBackup || isRestoringBackup) ? { opacity: 0.86, transform: [{ scale: 0.995 }] } : undefined,
                         ]}
                       >
-                        <Text className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>
+                        <Typography className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>
                           {isRestoringBackup ? 'Restaurando...' : 'Restaurar respaldo'}
-                        </Text>
+                        </Typography>
                       </Pressable>
                     </View>
-                    <Text className="mt-3 text-xs" style={{ color: theme.muted }}>
+                    <Typography className="mt-3 text-xs" style={{ color: theme.muted }}>
                       {lastBackupAt ? `Último respaldo: ${new Date(lastBackupAt).toLocaleString('es-MX')}` : 'Aún no has generado respaldos.'}
-                    </Text>
+                    </Typography>
                   </View>
 
                 <View className="mt-5 rounded-xl border px-3 py-3" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
-                  <Text className="mb-3 text-xs font-medium" style={{ color: hasPendingPreferenceChanges ? UI_COLORS.danger : theme.muted }}>
+                  <Typography className="mb-3 text-xs font-medium" style={{ color: hasPendingPreferenceChanges ? UI_COLORS.danger : theme.muted }}>
                     {hasPendingPreferenceChanges ? 'Hay cambios sin guardar.' : 'Configuración guardada.'}
-                  </Text>
+                  </Typography>
                   <Pressable
                     onPress={savePreferences}
                     hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
                     className="min-h-[46px] items-center justify-center rounded-xl border border-corporate-primary bg-corporate-primary px-4 py-3"
                     style={{ backgroundColor: accent.color, borderColor: accent.border }}
                   >
-                    <Text className="text-xs font-semibold tracking-[0.04em]" style={{ color: accentTextColor }}>Guardar cambios</Text>
+                    <Typography className="text-xs font-semibold tracking-[0.04em]" style={{ color: accentTextColor }}>Guardar cambios</Typography>
                   </Pressable>
                 </View>
               </View>
@@ -2374,4 +2376,6 @@ export default function BolsasScreen({
     </KeyboardAvoidingView>
   );
 }
+
+
 
