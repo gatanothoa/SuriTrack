@@ -1,3 +1,5 @@
+import { z } from 'zod';
+
 export type CalculationMode = 'bags' | 'pieces' | 'other';
 export type CalculationUnit = 'pieces' | 'kg' | 'g' | 'l';
 
@@ -8,25 +10,41 @@ export type CalculationMaterial = {
   requestUnit: CalculationUnit;
 };
 
-export function parsePositiveNumber(value: string) {
-  const normalized = value.replace(',', '.').trim();
-  const parsed = Number(normalized);
-
-  if (!normalized || Number.isNaN(parsed) || parsed <= 0) {
-    return 0;
-  }
-
-  return parsed;
-}
-
-export function parseOptionalPositiveNumber(value: string) {
+const optionalPositiveNumberSchema = z.string().transform((value, context) => {
   const normalized = value.replace(',', '.').trim();
 
   if (!normalized) {
     return 0;
   }
 
-  return parsePositiveNumber(value);
+  const parsed = Number(normalized);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    context.addIssue({ code: z.ZodIssueCode.custom, message: 'Número positivo inválido' });
+    return z.NEVER;
+  }
+
+  return parsed;
+});
+
+export function parsePositiveNumber(value: string) {
+  const result = optionalPositiveNumberSchema.safeParse(value);
+
+  if (!result.success) {
+    return 0;
+  }
+
+  return result.data;
+}
+
+export function parseOptionalPositiveNumber(value: string) {
+  const result = optionalPositiveNumberSchema.safeParse(value);
+
+  if (!result.success) {
+    return 0;
+  }
+
+  return result.data;
 }
 
 export function isNonEmptyPositive(value: number) {

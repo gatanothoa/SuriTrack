@@ -1,6 +1,6 @@
 import './global.css';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Image, StatusBar as RNStatusBar, View } from 'react-native';
 import Typography from './src/components/Typography';
 import { StatusBar } from 'expo-status-bar';
@@ -8,22 +8,9 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import BolsasScreen from './src/screens/BolsasScreen';
-
+import { DEFAULT_HEADER_PREFERENCES, useHeaderPreferencesStore } from './src/store/useHeaderPreferencesStore';
+import { loadStoredConfigFromDb, isMigrationCompleted, markMigrationCompleted } from './src/services/databaseService';
 const STORAGE_KEY = 'calcpack.materials.config.v5';
-
-type HeaderPreferences = {
-  appName: string;
-  headerSubtitle: string;
-  logoSource: string;
-  themeMode: 'dark' | 'light';
-};
-
-const DEFAULT_HEADER_PREFERENCES: HeaderPreferences = {
-  appName: 'SurtiTrack',
-  headerSubtitle: 'Solicitud logística corporativa',
-  logoSource: '',
-  themeMode: 'dark',
-};
 
 function StartupLogo() {
 
@@ -47,34 +34,14 @@ function StartupLogo() {
 
 export default function App() {
   const [ready, setReady] = useState(false);
-  const [headerPreferences, setHeaderPreferences] = useState<HeaderPreferences>(DEFAULT_HEADER_PREFERENCES);
+  const headerPreferences = useHeaderPreferencesStore((state) => state.headerPreferences);
+  const setHeaderPreferences = useHeaderPreferencesStore((state) => state.setHeaderPreferences);
   const isLightMode = headerPreferences.themeMode === 'light';
   const appBackground = isLightMode ? '#F2F7FD' : '#081A33';
   const appSurface = isLightMode ? '#FFFFFF' : '#0E2748';
   const appBorder = isLightMode ? '#D7E4F5' : '#23456F';
   const appText = isLightMode ? '#1F2937' : '#FFFFFF';
   const appSubText = isLightMode ? '#4E6B94' : '#A9C4EA';
-
-  const handleHeaderPreferencesChange = useCallback((nextPreferences: HeaderPreferences) => {
-    setHeaderPreferences((current) => {
-      if (
-        current.appName === nextPreferences.appName &&
-        current.headerSubtitle === nextPreferences.headerSubtitle &&
-        current.logoSource === nextPreferences.logoSource &&
-        current.themeMode === nextPreferences.themeMode
-      ) {
-        return current;
-      }
-
-      return {
-        ...current,
-        appName: nextPreferences.appName,
-        headerSubtitle: nextPreferences.headerSubtitle,
-        logoSource: nextPreferences.logoSource,
-        themeMode: nextPreferences.themeMode,
-      };
-    });
-  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setReady(true), 1300);
@@ -86,25 +53,46 @@ export default function App() {
 
     async function loadHeaderPreferences() {
       try {
-        const storedValue = await AsyncStorage.getItem(STORAGE_KEY);
+        const storedFromDb = await loadStoredConfigFromDb();
+        const migrationDone = await isMigrationCompleted();
 
-        if (!storedValue || !isMounted) {
+        if (storedFromDb?.preferences && isMounted) {
+          setHeaderPreferences({
+            appName: storedFromDb.preferences.appName,
+            headerSubtitle: storedFromDb.preferences.headerSubtitle,
+            logoSource: storedFromDb.preferences.logoSource,
+            themeMode: storedFromDb.preferences.themeMode === 'light' ? 'light' : 'dark',
+          });
+          
+          // Mark migration as completed once we've loaded from SQLite
+          if (!migrationDone) {
+            void markMigrationCompleted();
+          }
           return;
         }
 
-        const parsed = JSON.parse(storedValue) as { preferences?: Partial<HeaderPreferences> };
-        const preferences = parsed.preferences ?? {};
+        // Only attempt AsyncStorage fallback if migration hasn't been completed
+        if (!migrationDone) {
+          const storedValue = await AsyncStorage.getItem(STORAGE_KEY);
 
-        setHeaderPreferences({
-          appName: typeof preferences.appName === 'string' && preferences.appName.trim() ? preferences.appName.trim() : DEFAULT_HEADER_PREFERENCES.appName,
-          headerSubtitle:
-            typeof preferences.headerSubtitle === 'string' && preferences.headerSubtitle.trim()
-              ? preferences.headerSubtitle.trim()
-              : DEFAULT_HEADER_PREFERENCES.headerSubtitle,
-          logoSource:
-            typeof preferences.logoSource === 'string' && preferences.logoSource.trim() ? preferences.logoSource.trim() : DEFAULT_HEADER_PREFERENCES.logoSource,
-          themeMode: preferences.themeMode === 'light' ? 'light' : 'dark',
-        });
+          if (!storedValue || !isMounted) {
+            return;
+          }
+
+          const parsed = JSON.parse(storedValue) as { preferences?: Partial<typeof DEFAULT_HEADER_PREFERENCES> };
+          const preferences = parsed.preferences ?? {};
+
+          setHeaderPreferences({
+            appName: typeof preferences.appName === 'string' && preferences.appName.trim() ? preferences.appName.trim() : DEFAULT_HEADER_PREFERENCES.appName,
+            headerSubtitle:
+              typeof preferences.headerSubtitle === 'string' && preferences.headerSubtitle.trim()
+                ? preferences.headerSubtitle.trim()
+                : DEFAULT_HEADER_PREFERENCES.headerSubtitle,
+            logoSource:
+              typeof preferences.logoSource === 'string' && preferences.logoSource.trim() ? preferences.logoSource.trim() : DEFAULT_HEADER_PREFERENCES.logoSource,
+            themeMode: preferences.themeMode === 'light' ? 'light' : 'dark',
+          });
+        }
       } catch {
         setHeaderPreferences(DEFAULT_HEADER_PREFERENCES);
       }
@@ -150,7 +138,7 @@ export default function App() {
             </View>
           </View>
 
-          <BolsasScreen onHeaderPreferencesChange={handleHeaderPreferencesChange} />
+          <BolsasScreen />
         </View>
       </SafeAreaView>
     </SafeAreaProvider>

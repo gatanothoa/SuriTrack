@@ -6,7 +6,6 @@ import {
   Image,
   Platform,
   KeyboardAvoidingView,
-  Pressable,
   ScrollView,
   Text,
   TextInput,
@@ -20,8 +19,12 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 import * as XLSX from 'xlsx';
+import Papa from 'papaparse';
 import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from '@expo-google-fonts/inter';
 import { useAppColorScheme } from '../hooks/useAppColorScheme';
+import { useAppPreferences } from '../hooks/useAppPreferences';
+import { useCart } from '../hooks/useCart';
+import { useMaterials } from '../hooks/useMaterials';
 import {
   calculateRequestedUnit,
   calculateRequestedValue,
@@ -34,8 +37,10 @@ import MaterialCard from '../components/MaterialCard';
 import ConfigRow from '../components/ConfigRow';
 import Typography from '../components/Typography';
 import CorporateButton from '../components/CorporateButton';
+import { useHeaderPreferencesStore } from '../store/useHeaderPreferencesStore';
 import { persistLogoLocally, sendLogisticsEmail, stringToTemplateElements, templateElementsToString } from '../services/logisticsService';
 import { createBackupFile, readBackupFile } from '../services/backupService';
+import { loadStoredConfigFromDb, saveStoredConfigToDb } from '../services/databaseService';
 import type {
   TemplateElement,
   AppPreferences,
@@ -493,11 +498,7 @@ function createMaterialTemplate(
   };
 }
 
-export default function BolsasScreen({
-  onHeaderPreferencesChange,
-}: {
-  onHeaderPreferencesChange?: (preferences: HeaderPreferencesPayload) => void;
-} = {}) {
+export default function BolsasScreen() {
   // Cargar fuentes profesionales Inter
   const [fontsLoaded] = useFonts({
     Inter_400Regular,
@@ -509,26 +510,35 @@ export default function BolsasScreen({
   // Detectar automáticamente tema del SO (y permitir override manual)
   const { theme: osTheme } = useAppColorScheme();
 
-  const [selectedCategory, setSelectedCategory] = useState<MaterialCategory>('bolsas');
-  const [selectedMaterialId, setSelectedMaterialId] = useState('');
-  const [materials, setMaterials] = useState<MaterialOption[]>([]);
-  const [recipientEmail, setRecipientEmail] = useState('');
-  const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const { selectedCategory, setSelectedCategory, selectedMaterialId, setSelectedMaterialId, materials, setMaterials } = useMaterials();
+  const { recipientEmail, setRecipientEmail, cartItems, setCartItems, nextLeadNumber, setNextLeadNumber } = useCart();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [statusType, setStatusType] = useState<'success' | 'error' | null>(null);
-  const [nextLeadNumber, setNextLeadNumber] = useState(1);
-  const [preferences, setPreferences] = useState<AppPreferences>(DEFAULT_PREFERENCES);
-  const [draftPreferences, setDraftPreferences] = useState<AppPreferences>(DEFAULT_PREFERENCES);
-  const [templateElements, setTemplateElements] = useState<TemplateElement[]>([]);
-  const [draftTemplateElements, setDraftTemplateElements] = useState<TemplateElement[]>([]);
+  const {
+    preferences,
+    setPreferences,
+    draftPreferences,
+    setDraftPreferences,
+    templateElements,
+    setTemplateElements,
+    draftTemplateElements,
+    setDraftTemplateElements,
+    runtimeLogoSource,
+    setRuntimeLogoSource,
+    logoPermissionDenied,
+    setLogoPermissionDenied,
+    drafts,
+    setDrafts,
+  } = useAppPreferences(DEFAULT_PREFERENCES);
   const sectionAnimations = useRef(Array.from({ length: 4 }, () => new Animated.Value(0))).current;
   const categorySectionAnimation = useRef(new Animated.Value(1)).current;
   const settingsPanelAnimation = useRef(new Animated.Value(0)).current;
   const [renderSettingsPanel, setRenderSettingsPanel] = useState(false);
   const accent = BRAND_ACCENT;
+  const setHeaderPreferences = useHeaderPreferencesStore((state) => state.setHeaderPreferences);
   
   // Tema automático del SO + preferencia manual del usuario
   const isDarkTheme = draftPreferences.themeMode === 'dark' ? true : draftPreferences.themeMode === 'light' ? false : osTheme === 'dark';
@@ -545,12 +555,6 @@ export default function BolsasScreen({
   };
   const categoryDisplayNames = normalizeCategoryDisplayNames(draftPreferences.categoryDisplayNames);
   const categoryLabelForUi = (category: MaterialCategory) => categoryLabel(category, categoryDisplayNames);
-  const [drafts, setDrafts] = useState<Record<MaterialCategory, MaterialDraft>>({
-    bolsas: { title: '', weightInput: '', weightUnit: 'g', otherUnit: 'kg' },
-    cajas: { title: '', weightInput: '', weightUnit: 'kg', otherUnit: 'kg' },
-    otros: { title: '', weightInput: '', weightUnit: 'kg', otherUnit: 'kg' },
-  });
-  const [runtimeLogoSource, setRuntimeLogoSource] = useState('');
   const [isCreatingBackup, setIsCreatingBackup] = useState(false);
   const [isRestoringBackup, setIsRestoringBackup] = useState(false);
   const [lastBackupAt, setLastBackupAt] = useState<string | null>(null);
@@ -576,24 +580,62 @@ export default function BolsasScreen({
   }, [statusMessage, statusType]);
 
   useEffect(() => {
-    if (isLoading) {
-      return;
-    }
-
-    onHeaderPreferencesChange?.({
-      appName: draftPreferences.appName,
-      headerSubtitle: draftPreferences.headerSubtitle,
-      logoSource: effectiveHeaderLogoSource,
-      themeMode: draftPreferences.themeMode,
-    });
-  }, [draftPreferences.appName, draftPreferences.headerSubtitle, draftPreferences.themeMode, effectiveHeaderLogoSource, isLoading, onHeaderPreferencesChange]);
-
-  useEffect(() => {
     let isMounted = true;
 
     async function loadStoredConfig() {
       try {
         await AsyncStorage.multiRemove(LEGACY_STORAGE_KEYS);
+
+        const dbStoredConfig = await loadStoredConfigFromDb();
+
+        if (dbStoredConfig) {
+          let logoSourceToUse = dbStoredConfig.preferences.logoSource;
+
+          if (Platform.OS === 'web' && typeof sessionStorage !== 'undefined') {
+            try {
+              const storedLogoDataUri = sessionStorage.getItem('calcpack.logo.datauri');
+              if (storedLogoDataUri && storedLogoDataUri.startsWith('data:image/')) {
+                logoSourceToUse = storedLogoDataUri;
+              }
+            } catch {
+              // Si sessionStorage falla, se continúa con logo persistido.
+            }
+          }
+
+          const persistableLogoSource = Platform.OS === 'web' && logoSourceToUse.startsWith('data:image/') ? '' : logoSourceToUse;
+          const nextPreferencesFromDb: AppPreferences = {
+            ...dbStoredConfig.preferences,
+            logoSource: persistableLogoSource,
+            categoryDisplayNames: normalizeCategoryDisplayNames(dbStoredConfig.preferences.categoryDisplayNames),
+          };
+
+          setSelectedCategory(dbStoredConfig.selectedCategory);
+          setSelectedMaterialId(dbStoredConfig.selectedMaterialId);
+          setRecipientEmail(dbStoredConfig.recipientEmail);
+          setMaterials(dbStoredConfig.materials);
+          setCartItems(dbStoredConfig.cartItems);
+          setNextLeadNumber(dbStoredConfig.nextLeadNumber);
+          setRuntimeLogoSource(logoSourceToUse);
+          setPreferences(nextPreferencesFromDb);
+          setDraftPreferences(nextPreferencesFromDb);
+          setHeaderPreferences({
+            appName: nextPreferencesFromDb.appName,
+            headerSubtitle: nextPreferencesFromDb.headerSubtitle,
+            logoSource: logoSourceToUse,
+            themeMode: nextPreferencesFromDb.themeMode,
+          });
+
+          const templateStr = typeof nextPreferencesFromDb.emailTemplate === 'string' ? nextPreferencesFromDb.emailTemplate : DEFAULT_PREFERENCES.emailTemplate;
+          const elements = typeof templateStr === 'string' ? stringToTemplateElements(templateStr as string) : templateStr;
+          setTemplateElements(elements);
+          setDraftTemplateElements(elements);
+
+          setStatusMessage('Configuración cargada desde SQLite');
+          setStatusType('success');
+          setIsLoading(false);
+          return;
+        }
+
         const storedValue = await AsyncStorage.getItem(STORAGE_KEY);
 
         if (!isMounted) {
@@ -741,7 +783,7 @@ export default function BolsasScreen({
           setRuntimeLogoSource(logoSourceToUse);
           setPreferences(nextPreferences);
           setDraftPreferences(nextPreferences);
-          onHeaderPreferencesChange?.({
+          setHeaderPreferences({
             appName: nextPreferences.appName,
             headerSubtitle: nextPreferences.headerSubtitle,
             logoSource: logoSourceToUse,
@@ -890,7 +932,8 @@ export default function BolsasScreen({
     };
 
     const timer = setTimeout(() => {
-      void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+      // Persistent storage now handled exclusively by SQLite
+      void saveStoredConfigToDb(payload);
     }, 350);
 
     return () => clearTimeout(timer);
@@ -1024,7 +1067,7 @@ export default function BolsasScreen({
     setDraftPreferences(nextPreferences);
     setTemplateElements(draftTemplateElements);
     setDraftTemplateElements(draftTemplateElements);
-    onHeaderPreferencesChange?.({
+    setHeaderPreferences({
       appName: nextPreferences.appName,
       headerSubtitle: nextPreferences.headerSubtitle,
       logoSource: persistedLogo.logoSource, // Pasar el logo real (desde sessionStorage o FileSystem) al header
@@ -1104,9 +1147,12 @@ export default function BolsasScreen({
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
+      setLogoPermissionDenied(true);
       Alert.alert('Carga de logo', 'Se necesita permiso para acceder a la galería.');
       return;
     }
+
+    setLogoPermissionDenied(false);
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
@@ -1150,20 +1196,35 @@ export default function BolsasScreen({
       const readEncoding = isCsv ? FileSystem.EncodingType.UTF8 : FileSystem.EncodingType.Base64;
       const fileContent = await FileSystem.readAsStringAsync(file.uri, { encoding: readEncoding });
 
-      const workbook = isCsv
-        ? XLSX.read(fileContent, { type: 'string' })
-        : XLSX.read(fileContent, { type: 'base64' });
+      let rows: Record<string, unknown>[] = [];
 
-      const firstSheetName = workbook.SheetNames[0];
+      if (isCsv) {
+        const parsedCsv = Papa.parse<Record<string, string>>(fileContent, {
+          header: true,
+          skipEmptyLines: 'greedy',
+          transformHeader: (header: string) => header.trim(),
+        });
 
-      if (!firstSheetName) {
-        setStatusMessage('El archivo no contiene hojas para importar.');
-        setStatusType('error');
-        return;
+        if (parsedCsv.errors.length > 0) {
+          setStatusMessage(`CSV inválido: ${parsedCsv.errors[0]?.message ?? 'Error de formato'}`);
+          setStatusType('error');
+          return;
+        }
+
+        rows = parsedCsv.data.map((row: Record<string, string>) => ({ ...row }));
+      } else {
+        const workbook = XLSX.read(fileContent, { type: 'base64' });
+        const firstSheetName = workbook.SheetNames[0];
+
+        if (!firstSheetName) {
+          setStatusMessage('El archivo no contiene hojas para importar.');
+          setStatusType('error');
+          return;
+        }
+
+        const worksheet = workbook.Sheets[firstSheetName];
+        rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: '' });
       }
-
-      const worksheet = workbook.Sheets[firstSheetName];
-      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: '' });
       const { materials: importedMaterials, errors } = parseImportedMaterials(rows, categoryDisplayNames);
 
       if (errors.length > 0) {
@@ -1468,7 +1529,7 @@ export default function BolsasScreen({
       setTemplateElements(restoredTemplate);
       setDraftTemplateElements(restoredTemplate);
 
-      onHeaderPreferencesChange?.({
+      setHeaderPreferences({
         appName: normalizedPreferences.appName,
         headerSubtitle: normalizedPreferences.headerSubtitle,
         logoSource: logoSourceToUse,
@@ -1482,6 +1543,11 @@ export default function BolsasScreen({
           preferences: normalizedPreferences,
         })
       );
+
+      await saveStoredConfigToDb({
+        ...restored,
+        preferences: normalizedPreferences,
+      });
 
       setStatusMessage('Respaldo restaurado correctamente.');
       setStatusType('success');
@@ -1614,25 +1680,19 @@ export default function BolsasScreen({
               const active = category.key === selectedCategory;
 
               return (
-                <Pressable
+                <CorporateButton
                   key={category.key}
                   onPress={() => setSelectedCategory(category.key)}
-                  hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                  className="flex-1 min-h-[48px] rounded-xl border px-3 py-3"
-                  style={({ pressed }) => [
-                    active ? { borderColor: accent.border, backgroundColor: accent.color } : { borderColor: theme.border, backgroundColor: theme.panelAltBg },
-                    pressed ? { transform: [{ scale: 0.98 }] } : undefined,
-                  ]}
-                >
-                  <View className="items-center gap-2">
-                    <View className="h-6 w-6 items-center justify-center rounded border" style={{ borderColor: active ? accentTextColor : theme.border }}>
-                      <MaterialCommunityIcons name={category.icon} size={18} color={active ? accentTextColor : UI_COLORS.blue} />
-                    </View>
-                    <Typography variant="body" weight="semibold" color={active ? accentTextColor : theme.text} align="center">
-                      {categoryLabelForUi(category.key)}
-                    </Typography>
-                  </View>
-                </Pressable>
+                  label={categoryLabelForUi(category.key)}
+                  icon={{ name: category.icon, position: 'left' }}
+                  variant={active ? 'primary' : 'secondary'}
+                  size="md"
+                  fullWidth
+                  theme={theme}
+                  accent={accent}
+                  accentTextColor={accentTextColor}
+                  className="min-h-[48px]"
+                />
               );
             })}
           </View>
@@ -1669,36 +1729,38 @@ export default function BolsasScreen({
             <>
               <Typography className="mb-1 text-xs" style={{ color: theme.muted }}>Unidad base del peso</Typography>
               <View className="mb-3 flex-row gap-2">
-                <Pressable
+                <CorporateButton
                   onPress={() =>
                     setDrafts((current) => ({
                       ...current,
                       bolsas: { ...current.bolsas, weightUnit: 'g' },
                     }))
                   }
-                  hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                  className="flex-1 min-h-[44px] items-center justify-center rounded-xl border px-3 py-3"
-                  style={drafts.bolsas.weightUnit === 'g' ? { backgroundColor: accent.color, borderColor: accent.border } : { backgroundColor: theme.panelAltBg, borderColor: theme.border }}
-                >
-                  <Typography className="text-center text-sm font-semibold" style={{ color: drafts.bolsas.weightUnit === 'g' ? accentTextColor : theme.text }}>
-                    Gramos
-                  </Typography>
-                </Pressable>
-                <Pressable
+                  label="Gramos"
+                  variant={drafts.bolsas.weightUnit === 'g' ? 'primary' : 'secondary'}
+                  size="sm"
+                  fullWidth
+                  theme={theme}
+                  accent={accent}
+                  accentTextColor={accentTextColor}
+                  className="min-h-[44px]"
+                />
+                <CorporateButton
                   onPress={() =>
                     setDrafts((current) => ({
                       ...current,
                       bolsas: { ...current.bolsas, weightUnit: 'kg' },
                     }))
                   }
-                  hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                    className="flex-1 min-h-[44px] items-center justify-center rounded-xl border px-3 py-3"
-                    style={drafts.bolsas.weightUnit === 'kg' ? { backgroundColor: accent.color, borderColor: accent.border } : { backgroundColor: theme.panelAltBg, borderColor: theme.border }}
-                >
-                    <Typography className="text-center text-sm font-semibold" style={{ color: drafts.bolsas.weightUnit === 'kg' ? accentTextColor : theme.text }}>
-                    Kilogramos
-                  </Typography>
-                </Pressable>
+                  label="Kilogramos"
+                  variant={drafts.bolsas.weightUnit === 'kg' ? 'primary' : 'secondary'}
+                  size="sm"
+                  fullWidth
+                  theme={theme}
+                  accent={accent}
+                  accentTextColor={accentTextColor}
+                  className="min-h-[44px]"
+                />
               </View>
 
               <Typography className="mb-1 text-xs" style={{ color: theme.muted }}>Peso por 100 piezas ({drafts.bolsas.weightUnit})</Typography>
@@ -1733,7 +1795,7 @@ export default function BolsasScreen({
                   const active = drafts.otros.otherUnit === unit;
 
                   return (
-                    <Pressable
+                    <CorporateButton
                       key={unit}
                       onPress={() =>
                         setDrafts((current) => ({
@@ -1741,34 +1803,31 @@ export default function BolsasScreen({
                           otros: { ...current.otros, otherUnit: unit },
                         }))
                       }
-                      hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                        className="flex-1 min-h-[44px] items-center justify-center rounded-xl border px-3 py-3"
-                        style={active ? { backgroundColor: accent.color, borderColor: accent.border } : { backgroundColor: theme.panelAltBg, borderColor: theme.border }}
-                    >
-                        <Typography className="text-center text-sm font-semibold" style={{ color: active ? accentTextColor : theme.text }}>
-                        {unitLabel(unit)}
-                      </Typography>
-                    </Pressable>
+                      label={unitLabel(unit)}
+                      variant={active ? 'primary' : 'secondary'}
+                      size="sm"
+                      fullWidth
+                      theme={theme}
+                      accent={accent}
+                      accentTextColor={accentTextColor}
+                      className="min-h-[44px]"
+                    />
                   );
                 })}
               </View>
             </>
           ) : null}
 
-          <Pressable
+          <CorporateButton
             onPress={addMaterialToCurrentCategory}
-            className="mt-4 min-h-[48px] rounded-ind border border-corporate-primary bg-corporate-primary px-4 py-4"
-            style={({ pressed }) => [
-              { backgroundColor: accent.color, borderColor: accent.border },
-              pressed ? { opacity: 0.86, transform: [{ scale: 0.995 }] } : undefined,
-            ]}
-          >
-            <View className="flex-row items-center justify-center gap-2">
-              <Typography className="text-center text-sm font-semibold" style={{ color: accentTextColor }} numberOfLines={2}>
-                Agregar material en {categoryLabelForUi(selectedCategory)}
-              </Typography>
-            </View>
-          </Pressable>
+            label={`Agregar material en ${categoryLabelForUi(selectedCategory)}`}
+            variant="primary"
+            size="md"
+            theme={theme}
+            accent={accent}
+            accentTextColor={accentTextColor}
+            className="mt-4"
+          />
         </View>
 
         {currentMaterials.length === 0 ? (
@@ -1841,19 +1900,16 @@ export default function BolsasScreen({
           </Typography>
         </View>
 
-        <Pressable
+        <CorporateButton
           onPress={addToRequest}
-          className="mt-4 min-h-[48px] rounded-xl border border-corporate-primary bg-corporate-primary px-4 py-4"
-          style={({ pressed }) => [
-            { backgroundColor: accent.color, borderColor: accent.border },
-            pressed ? { opacity: 0.86, transform: [{ scale: 0.995 }] } : undefined,
-          ]}
-          hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-        >
-          <View className="flex-row items-center justify-center gap-2">
-            <Typography className="text-center text-sm font-bold" style={{ color: accentTextColor }}>Agregar a la solicitud</Typography>
-          </View>
-        </Pressable>
+          label="Agregar a la solicitud"
+          variant="primary"
+          size="md"
+          theme={theme}
+          accent={accent}
+          accentTextColor={accentTextColor}
+          className="mt-4"
+        />
         </Animated.View>
 
         <Animated.View className="mt-7" style={getSectionEntryStyle(2)}>
@@ -1923,14 +1979,17 @@ export default function BolsasScreen({
                           {categoryLabelForUi(item.category)} · {modeLabel(item.calcMode)}
                         </Typography>
                       </View>
-                      <Pressable
+                      <CorporateButton
                         onPress={() => removeCartItem(item.id)}
-                        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                        className="min-h-10 min-w-10 items-center justify-center rounded-ind border px-3 py-2"
-                        style={({ pressed }) => [{ borderColor: accent.border }, pressed ? { opacity: 0.82 } : undefined]}
-                      >
-                        <Typography className="text-[12px] font-semibold" style={{ color: theme.text }}>Quitar</Typography>
-                      </Pressable>
+                        label="Quitar"
+                        variant="outline"
+                        size="sm"
+                        fullWidth={false}
+                        theme={theme}
+                        accent={accent}
+                        accentTextColor={accentTextColor}
+                        className="min-w-10"
+                      />
                     </View>
 
                     <View className="flex-row flex-wrap gap-3">
@@ -1949,41 +2008,45 @@ export default function BolsasScreen({
             )}
 
             <View className="mt-2 flex-row gap-2">
-              <Pressable
+              <CorporateButton
                 onPress={clearCart}
-                hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                className="flex-1 min-h-[46px] items-center justify-center rounded-ind border px-3 py-3"
-                style={{ borderColor: theme.border, backgroundColor: theme.panelAltBg }}
-              >
-                <Typography className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>Vaciar solicitud</Typography>
-              </Pressable>
-              <Pressable
-                disabled={!canSendEmail}
+                label="Vaciar solicitud"
+                variant="secondary"
+                size="sm"
+                fullWidth
+                theme={theme}
+                accent={accent}
+                accentTextColor={accentTextColor}
+              />
+              <CorporateButton
                 onPress={() => {
                   void sendCartByEmail();
                 }}
-                hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                className="flex-1 min-h-[46px] items-center justify-center rounded-ind border px-3 py-3"
-                style={canSendEmail ? { backgroundColor: accent.color, borderColor: accent.border } : { backgroundColor: theme.panelAltBg, borderColor: theme.border, opacity: 0.72 }}
-              >
-                <Typography className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: canSendEmail ? accentTextColor : theme.text }}>
-                  {isSendingEmail ? 'Enviando...' : 'Enviar solicitud'}
-                </Typography>
-              </Pressable>
+                label={isSendingEmail ? 'Enviando...' : 'Enviar solicitud'}
+                variant="primary"
+                size="sm"
+                fullWidth
+                disabled={!canSendEmail || isSendingEmail}
+                theme={theme}
+                accent={accent}
+                accentTextColor={accentTextColor}
+              />
             </View>
           </View>
         </Animated.View>
 
         <Animated.View className="mt-6 rounded-2xl border px-4 py-4 shadow-sm" style={[{ backgroundColor: theme.panelBg, borderColor: theme.border }, getSectionEntryStyle(3)]}>
-          <Pressable onPress={() => setSettingsOpen((current) => !current)} hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }} className="flex-row items-center justify-between">
-            <View className="flex-row items-center gap-2">
-              <View className="h-5 w-5 items-center justify-center rounded border" style={{ borderColor: accent.border }}>
-                <MaterialCommunityIcons name="tune-variant" size={12} color={accent.color} />
-              </View>
-              <Typography className="text-base font-semibold" style={{ color: theme.text }}>Personalización de app</Typography>
-            </View>
-            <Typography className="text-base font-bold" style={{ color: theme.muted }}>{settingsOpen ? '˄' : '˅'}</Typography>
-          </Pressable>
+          <CorporateButton
+            onPress={() => setSettingsOpen((current) => !current)}
+            label="Personalización de app"
+            icon={{ name: settingsOpen ? 'chevron-up' : 'chevron-down', position: 'right' }}
+            variant="secondary"
+            size="md"
+            theme={theme}
+            accent={accent}
+            accentTextColor={accentTextColor}
+            className="w-full"
+          />
           <Typography className="mt-1 text-xs" style={{ color: theme.muted }}>Marca, respaldo, plantilla y configuración visual</Typography>
 
           {renderSettingsPanel ? (
@@ -2093,42 +2156,36 @@ export default function BolsasScreen({
 
                     return (
                       <>
-                  <Pressable
-                    onPress={() =>
-                      setDraftPreferences((current) => ({
-                        ...current,
-                        themeMode: 'dark',
-                      }))
-                    }
-                    hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                    className="flex-1 min-h-[44px] items-center justify-center rounded-xl border px-3 py-3"
-                    style={{
-                      backgroundColor: darkModeActive ? accent.color : theme.panelAltBg,
-                      borderColor: darkModeActive ? accent.border : theme.border,
-                    }}
-                  >
-                    <Typography className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: darkModeActive ? accentTextColor : theme.text }}>
-                      Modo oscuro
-                    </Typography>
-                  </Pressable>
-                  <Pressable
-                    onPress={() =>
-                      setDraftPreferences((current) => ({
-                        ...current,
-                        themeMode: 'light',
-                      }))
-                    }
-                    hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                    className="flex-1 min-h-[44px] items-center justify-center rounded-xl border px-3 py-3"
-                    style={{
-                      backgroundColor: lightModeActive ? accent.color : theme.panelAltBg,
-                      borderColor: lightModeActive ? accent.border : theme.border,
-                    }}
-                  >
-                    <Typography className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: lightModeActive ? accentTextColor : theme.text }}>
-                      Modo claro
-                    </Typography>
-                  </Pressable>
+                        <CorporateButton
+                          onPress={() =>
+                            setDraftPreferences((current) => ({
+                              ...current,
+                              themeMode: 'dark',
+                            }))
+                          }
+                          label="Modo oscuro"
+                          variant={darkModeActive ? 'primary' : 'secondary'}
+                          size="sm"
+                          fullWidth
+                          theme={theme}
+                          accent={accent}
+                          accentTextColor={accentTextColor}
+                        />
+                        <CorporateButton
+                          onPress={() =>
+                            setDraftPreferences((current) => ({
+                              ...current,
+                              themeMode: 'light',
+                            }))
+                          }
+                          label="Modo claro"
+                          variant={lightModeActive ? 'primary' : 'secondary'}
+                          size="sm"
+                          fullWidth
+                          theme={theme}
+                          accent={accent}
+                          accentTextColor={accentTextColor}
+                        />
                       </>
                     );
                   })()}
@@ -2219,42 +2276,45 @@ export default function BolsasScreen({
                   </View>
 
                   <View className="mb-3 flex-row gap-2">
-                  <Pressable
-                    onPress={() => void pickLogoFromDevice()}
-                    hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                    className="flex-1 min-h-[46px] items-center justify-center rounded-ind border px-3 py-3"
-                    style={({ pressed }) => [
-                      { borderColor: theme.border, backgroundColor: theme.panelAltBg },
-                      pressed ? { opacity: 0.86, transform: [{ scale: 0.995 }] } : undefined,
-                    ]}
-                  >
-                    <Typography className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>
-                        Cargar desde galería
-                      </Typography>
-                    </Pressable>
-                    <Pressable
-                      onPress={() =>
-                        {
-                          setRuntimeLogoSource('');
-                          setDraftPreferences((current) => ({
-                            ...current,
-                            logoSource: '',
-                            logoLabel: DEFAULT_PREFERENCES.logoLabel,
-                          }));
-                        }
-                      }
-                      hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                      className="flex-1 min-h-[46px] items-center justify-center rounded-ind border px-3 py-3"
-                      style={({ pressed }) => [
-                        { borderColor: theme.border, backgroundColor: theme.panelAltBg },
-                        pressed ? { opacity: 0.86, transform: [{ scale: 0.995 }] } : undefined,
-                      ]}
-                    >
-                      <Typography className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>
-                        Quitar logo
-                      </Typography>
-                    </Pressable>
+                    <CorporateButton
+                      onPress={() => void pickLogoFromDevice()}
+                      label="Cargar desde galería"
+                      variant="secondary"
+                      size="sm"
+                      fullWidth
+                      theme={theme}
+                      accent={accent}
+                      accentTextColor={accentTextColor}
+                    />
+                    <CorporateButton
+                      onPress={() => {
+                        setRuntimeLogoSource('');
+                        setDraftPreferences((current) => ({
+                          ...current,
+                          logoSource: '',
+                          logoLabel: DEFAULT_PREFERENCES.logoLabel,
+                        }));
+                      }}
+                      label="Quitar logo"
+                      variant="secondary"
+                      size="sm"
+                      fullWidth
+                      theme={theme}
+                      accent={accent}
+                      accentTextColor={accentTextColor}
+                    />
                   </View>
+
+                  {logoPermissionDenied ? (
+                    <View className="mb-3 rounded-xl border px-3 py-3" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
+                      <Typography className="text-xs font-semibold" style={{ color: UI_COLORS.danger }}>
+                        Acceso a galería denegado.
+                      </Typography>
+                      <Typography className="mt-1 text-xs" style={{ color: theme.muted }}>
+                        Habilítalo en ajustes del sistema para cargar logos desde imágenes.
+                      </Typography>
+                    </View>
+                  ) : null}
 
                   <View className="mb-4 rounded-xl border px-4 py-4" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
                     <Typography className="mb-2 text-[13px] tracking-[0.08em]" style={{ color: theme.muted }}>Vista previa</Typography>
@@ -2283,19 +2343,15 @@ export default function BolsasScreen({
                     <Typography className="mb-3 text-xs" style={{ color: theme.muted }}>
                       Importa Excel/CSV con columnas: categoria, titulo, modo, unidad_solicitud, peso_por_100, unidad_peso.
                     </Typography>
-                    <Pressable
+                    <CorporateButton
                       onPress={() => void importMaterialsDatabase()}
-                      hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                      className="min-h-[46px] items-center justify-center rounded-ind border px-3 py-3"
-                      style={({ pressed }) => [
-                        { borderColor: theme.border, backgroundColor: theme.panelAltBg },
-                        pressed ? { opacity: 0.86, transform: [{ scale: 0.995 }] } : undefined,
-                      ]}
-                    >
-                      <Typography className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>
-                        Importar base desde Excel/CSV
-                      </Typography>
-                    </Pressable>
+                      label="Importar base desde Excel/CSV"
+                      variant="secondary"
+                      size="sm"
+                      theme={theme}
+                      accent={accent}
+                      accentTextColor={accentTextColor}
+                    />
                   </View>
 
                   <View className="mb-4 rounded-xl border px-4 py-4" style={{ backgroundColor: theme.panelAltBg, borderColor: theme.border }}>
@@ -2304,36 +2360,28 @@ export default function BolsasScreen({
                       Genera un respaldo JSON y súbelo a Drive, OneDrive o iCloud desde compartir.
                     </Typography>
                     <View className="flex-row gap-2">
-                      <Pressable
+                      <CorporateButton
                         onPress={() => void createCloudBackup()}
+                        label={isCreatingBackup ? 'Generando...' : 'Crear respaldo'}
+                        variant="secondary"
+                        size="sm"
+                        fullWidth
                         disabled={isCreatingBackup || isRestoringBackup}
-                        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                        className="flex-1 min-h-[46px] items-center justify-center rounded-ind border px-3 py-3"
-                        style={({ pressed }) => [
-                          { borderColor: theme.border, backgroundColor: theme.panelBg },
-                          isCreatingBackup || isRestoringBackup ? { opacity: 0.68 } : undefined,
-                          pressed && !(isCreatingBackup || isRestoringBackup) ? { opacity: 0.86, transform: [{ scale: 0.995 }] } : undefined,
-                        ]}
-                      >
-                        <Typography className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>
-                          {isCreatingBackup ? 'Generando...' : 'Crear respaldo'}
-                        </Typography>
-                      </Pressable>
-                      <Pressable
+                        theme={theme}
+                        accent={accent}
+                        accentTextColor={accentTextColor}
+                      />
+                      <CorporateButton
                         onPress={() => void restoreFromBackup()}
+                        label={isRestoringBackup ? 'Restaurando...' : 'Restaurar respaldo'}
+                        variant="secondary"
+                        size="sm"
+                        fullWidth
                         disabled={isCreatingBackup || isRestoringBackup}
-                        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                        className="flex-1 min-h-[46px] items-center justify-center rounded-ind border px-3 py-3"
-                        style={({ pressed }) => [
-                          { borderColor: theme.border, backgroundColor: theme.panelBg },
-                          isCreatingBackup || isRestoringBackup ? { opacity: 0.68 } : undefined,
-                          pressed && !(isCreatingBackup || isRestoringBackup) ? { opacity: 0.86, transform: [{ scale: 0.995 }] } : undefined,
-                        ]}
-                      >
-                        <Typography className="text-center text-xs font-semibold tracking-[0.06em]" style={{ color: theme.text }}>
-                          {isRestoringBackup ? 'Restaurando...' : 'Restaurar respaldo'}
-                        </Typography>
-                      </Pressable>
+                        theme={theme}
+                        accent={accent}
+                        accentTextColor={accentTextColor}
+                      />
                     </View>
                     <Typography className="mt-3 text-xs" style={{ color: theme.muted }}>
                       {lastBackupAt ? `Último respaldo: ${new Date(lastBackupAt).toLocaleString('es-MX')}` : 'Aún no has generado respaldos.'}
@@ -2344,14 +2392,15 @@ export default function BolsasScreen({
                   <Typography className="mb-3 text-xs font-medium" style={{ color: hasPendingPreferenceChanges ? UI_COLORS.danger : theme.muted }}>
                     {hasPendingPreferenceChanges ? 'Hay cambios sin guardar.' : 'Configuración guardada.'}
                   </Typography>
-                  <Pressable
+                  <CorporateButton
                     onPress={savePreferences}
-                    hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-                    className="min-h-[46px] items-center justify-center rounded-xl border border-corporate-primary bg-corporate-primary px-4 py-3"
-                    style={{ backgroundColor: accent.color, borderColor: accent.border }}
-                  >
-                    <Typography className="text-xs font-semibold tracking-[0.04em]" style={{ color: accentTextColor }}>Guardar cambios</Typography>
-                  </Pressable>
+                    label="Guardar cambios"
+                    variant="primary"
+                    size="sm"
+                    theme={theme}
+                    accent={accent}
+                    accentTextColor={accentTextColor}
+                  />
                 </View>
               </View>
 

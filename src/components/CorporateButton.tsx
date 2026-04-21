@@ -10,7 +10,7 @@ interface CorporateButtonProps {
   onPress: () => void;
   variant?: CorporateButtonVariant;
   size?: CorporateButtonSize;
-  icon?: { name: string; position?: 'left' | 'right' };
+  icon?: { name: keyof typeof MaterialCommunityIcons.glyphMap; position?: 'left' | 'right' };
   theme: {
     text: string;
     muted: string;
@@ -54,9 +54,9 @@ export default function CorporateButton({
 }: CorporateButtonProps) {
   // Size-based sizing and typography
   const sizeConfig = {
-    sm: { height: 36, px: 3, py: 2, textVariant: 'caption' as const },
-    md: { height: 48, px: 4, py: 3, textVariant: 'body' as const },
-    lg: { height: 56, px: 5, py: 4, textVariant: 'body' as const },
+    sm: { height: 36, px: 12, py: 8, textVariant: 'caption' as const },
+    md: { height: 48, px: 16, py: 12, textVariant: 'body' as const },
+    lg: { height: 56, px: 20, py: 16, textVariant: 'body' as const },
   };
 
   const config = sizeConfig[size];
@@ -103,9 +103,12 @@ export default function CorporateButton({
       disabled={disabled || loading}
       hitSlop={hitSlop}
       testID={testID}
-      className={`min-h-[${config.height}px] rounded-xl border ${fullWidth ? 'flex-1' : ''} items-center justify-center px-${config.px} py-${config.py} ${className}`}
+      className={`rounded-xl border items-center justify-center ${fullWidth ? 'flex-1' : ''} ${className}`}
       style={({ pressed }) => [
         {
+          minHeight: config.height,
+          paddingHorizontal: config.px,
+          paddingVertical: config.py,
           backgroundColor: disabled ? theme.muted + '20' : variantConfig.bg,
           borderColor: variantConfig.border,
           borderWidth: 1,
@@ -118,7 +121,7 @@ export default function CorporateButton({
       <View className="flex-row items-center justify-center gap-2">
         {icon && icon.position !== 'right' && (
           <MaterialCommunityIcons
-            name={icon.name as any}
+            name={icon.name}
             size={size === 'sm' ? 16 : 20}
             color={disabled ? theme.muted : variantConfig.textColor}
           />
@@ -140,7 +143,7 @@ export default function CorporateButton({
 
         {icon && icon.position === 'right' && (
           <MaterialCommunityIcons
-            name={icon.name as any}
+            name={icon.name}
             size={size === 'sm' ? 16 : 20}
             color={disabled ? theme.muted : variantConfig.textColor}
           />
